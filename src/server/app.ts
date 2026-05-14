@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -9,6 +11,9 @@ import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js
 import type { ArchitectTaskWorkflowInput } from "../workflows/architect-task.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
 
+const API_KEY_HEADER = "x-agent-office-api-key";
+const AGENT_OFFICE_ROUTE_PREFIX = "/agent-office/";
+
 export type ArchitectReviewWorkflow = {
   run(input: ArchitectTaskWorkflowInput): Promise<WorkflowResult>;
 };
@@ -19,6 +24,7 @@ export type ReadyArchitectureTaskScanner = {
 };
 
 export type AgentOfficeAppOptions = {
+  apiKey: string;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   runLog?: RunLog;
   statusAfterWriteback: string;
@@ -73,6 +79,26 @@ function getHttpStatusCode(error: unknown): number {
 
 function workflowErrorStatus(errorMessage: string): number {
   return errorMessage.startsWith("Invalid Notion page ID") ? 400 : 500;
+}
+
+function hashApiKey(value: string): Buffer {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
+function isAuthorizedApiKey(headerValue: unknown, expectedApiKey: string): boolean {
+  if (typeof headerValue !== "string") {
+    return false;
+  }
+
+  return timingSafeEqual(hashApiKey(headerValue), hashApiKey(expectedApiKey));
+}
+
+function requireConfiguredApiKey(apiKey: string): string {
+  if (apiKey.trim().length === 0) {
+    throw new Error("Agent Office API key must be configured.");
+  }
+
+  return apiKey;
 }
 
 function withOptionalFields(
@@ -158,6 +184,7 @@ async function recordRun(runLog: RunLog, summary: AgentOfficeRunSummary): Promis
 export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const runLog = options.runLog ?? noopRunLog;
+  const apiKey = requireConfiguredApiKey(options.apiKey);
 
   app.setErrorHandler((error, request, reply) =>
     reply.code(getHttpStatusCode(error)).send({
@@ -166,6 +193,19 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       taskId: getTaskIdFromBody(request.body),
     }),
   );
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith(AGENT_OFFICE_ROUTE_PREFIX)) {
+      return;
+    }
+
+    if (!isAuthorizedApiKey(request.headers[API_KEY_HEADER], apiKey)) {
+      return reply.code(401).send({
+        error: "Unauthorized.",
+        ok: false,
+      });
+    }
+  });
 
   app.get("/health", async () => ({
     ok: true,
