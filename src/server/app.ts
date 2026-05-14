@@ -40,6 +40,19 @@ function formatValidationError(error: z.ZodError): string {
   return `Invalid architect review request. ${details}`;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unexpected server error.";
+}
+
+function getHttpStatusCode(error: unknown): number {
+  if (!error || typeof error !== "object" || !("statusCode" in error)) {
+    return 500;
+  }
+
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500 ? statusCode : 500;
+}
+
 function workflowErrorStatus(errorMessage: string): number {
   return errorMessage.startsWith("Invalid Notion page ID") ? 400 : 500;
 }
@@ -47,15 +60,13 @@ function workflowErrorStatus(errorMessage: string): number {
 export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyInstance {
   const app = Fastify({ logger: false });
 
-  app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 500;
-
-    return reply.code(statusCode).send({
-      error: error.message || "Unexpected server error.",
+  app.setErrorHandler((error, request, reply) =>
+    reply.code(getHttpStatusCode(error)).send({
+      error: getErrorMessage(error),
       ok: false,
       taskId: getTaskIdFromBody(request.body),
-    });
-  });
+    }),
+  );
 
   app.get("/health", async () => ({
     ok: true,
