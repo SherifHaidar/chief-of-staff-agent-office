@@ -10,19 +10,25 @@ export * from "./agents/architect.agent.js";
 export * from "./config/env.js";
 export * from "./domain/ai-build-task.js";
 export * from "./domain/architect-brief.js";
+export * from "./domain/ready-architecture-task.js";
 export * from "./notion/notion-task.repository.js";
 export * from "./workflows/architect-task.workflow.js";
 export * from "./workflows/workflow-result.js";
 
-export function createArchitectTaskWorkflow(env: AppEnv): ArchitectTaskWorkflow {
-  process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
-
+export function createNotionTaskRepository(env: AppEnv): NotionTaskRepository {
   const notionClient = createNotionClient(env.NOTION_TOKEN);
-  const taskRepository = new NotionTaskRepository(notionClient, {
+
+  return new NotionTaskRepository(notionClient, {
     maxReadDepth: env.NOTION_MAX_READ_DEPTH,
     statusPropertyName: env.NOTION_STATUS_PROPERTY,
     statusPropertyType: env.NOTION_STATUS_PROPERTY_TYPE,
   });
+}
+
+export function createArchitectTaskWorkflow(env: AppEnv): ArchitectTaskWorkflow {
+  process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
+
+  const taskRepository = createNotionTaskRepository(env);
   const agents = createAgentRegistry({ model: env.OPENAI_MODEL });
 
   return new ArchitectTaskWorkflow({
