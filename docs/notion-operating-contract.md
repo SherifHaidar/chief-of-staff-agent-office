@@ -101,6 +101,18 @@ Required safety rules:
 - Agent code should not perform unrelated Notion writes.
 - The Architect Agent should generate structured output; the workflow layer owns side effects.
 
+## API Security Contract
+
+The hosted API must not expose Agent Office operations without authorization.
+
+- `GET /health` may remain public, but it must stay generic.
+- Every `/agent-office/*` endpoint must require `x-agent-office-api-key`.
+- The expected key must come from `AGENT_OFFICE_API_KEY` or an equivalent platform-managed secret.
+- Missing or invalid keys must return `401` without running scanner, workflow, or Notion write logic.
+- The API key must not be committed to Git or exposed in browser/frontend code.
+
+This is platform-neutral. Deployment protection from a host can be added later, but it should not replace the application-level API key.
+
 ## Duplicate-Processing Policy
 
 Duplicate prevention stays lightweight for now.
@@ -165,4 +177,4 @@ The current local JSONL run log plus structured API responses are enough for v1 
 - Runs need durable history across machines or deployments.
 - Run records need to be linked, filtered, or audited independently from task pages.
 
-Until then, keep run summaries local/API-visible and keep Notion focused on the task board.
+Until then, keep run summaries local/API-visible and keep Notion focused on the task board. On hosted platforms, do not treat the local JSONL file as durable audit storage unless the platform provides persistent storage mounted at `RUN_LOG_PATH`.
