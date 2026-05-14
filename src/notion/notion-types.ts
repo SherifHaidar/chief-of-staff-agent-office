@@ -15,6 +15,14 @@ export type NotionClientLike = {
       list(args: { block_id: string; page_size?: number; start_cursor?: string }): Promise<unknown>;
     };
   };
+  databases: {
+    query(args: {
+      database_id: string;
+      filter?: Record<string, unknown>;
+      page_size?: number;
+      start_cursor?: string;
+    }): Promise<unknown>;
+  };
   pages: {
     retrieve(args: { page_id: string }): Promise<unknown>;
     update(args: { page_id: string; properties: Record<string, unknown> }): Promise<unknown>;

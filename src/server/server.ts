@@ -2,7 +2,7 @@
 import "dotenv/config";
 
 import { loadEnv } from "../config/env.js";
-import { createArchitectTaskWorkflow } from "../index.js";
+import { createArchitectTaskWorkflow, createNotionTaskRepository } from "../index.js";
 import { createAgentOfficeApp } from "./app.js";
 
 function parsePort(value: string | undefined): number {
@@ -15,9 +15,27 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
+function requiredConfig(value: string | undefined, name: string): string {
+  if (!value) {
+    throw new Error(`${name} is required to start the Agent Office API server.`);
+  }
+
+  return value;
+}
+
 async function main(): Promise<void> {
   const env = loadEnv();
+  const taskDatabaseId = requiredConfig(env.NOTION_TASK_DATABASE_ID, "NOTION_TASK_DATABASE_ID");
+  const taskRepository = createNotionTaskRepository(env);
   const app = createAgentOfficeApp({
+    readyArchitectureScanner: {
+      findReadyForArchitectureTasks: () =>
+        taskRepository.findReadyForArchitectureTasks({
+          databaseId: taskDatabaseId,
+          statusName: env.NOTION_READY_FOR_ARCHITECTURE_STATUS,
+        }),
+      hasArchitectBrief: (taskId) => taskRepository.hasArchitectBrief(taskId),
+    },
     statusAfterWriteback: env.NOTION_STATUS_AFTER_ARCHITECT,
     workflow: createArchitectTaskWorkflow(env),
   });

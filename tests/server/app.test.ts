@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ArchitectBrief } from "../../src/domain/architect-brief.js";
-import { createAgentOfficeApp, type ArchitectReviewWorkflow } from "../../src/server/app.js";
+import type { ReadyArchitectureTask } from "../../src/domain/ready-architecture-task.js";
+import { createAgentOfficeApp, type ArchitectReviewWorkflow, type ReadyArchitectureTaskScanner } from "../../src/server/app.js";
 import type { WorkflowResult } from "../../src/workflows/workflow-result.js";
 
 const pageId = "11111111-1111-1111-1111-111111111111";
+const readyTask: ReadyArchitectureTask = {
+  name: "Test task",
+  priority: "High",
+  status: "Ready for Architecture",
+  taskId: pageId,
+};
 
 const brief: ArchitectBrief = {
   briefTitle: "Orchestrator API v0",
@@ -18,26 +25,46 @@ const brief: ArchitectBrief = {
   risks: [],
 };
 
+function workflowSuccess(dryRun: boolean): WorkflowResult {
+  return {
+    brief,
+    dryRun,
+    ok: true,
+    pageId,
+    statusUpdated: !dryRun,
+    title: "Test task",
+    wroteToNotion: !dryRun,
+  };
+}
+
 function createWorkflow(result: WorkflowResult) {
   return {
     run: vi.fn<ArchitectReviewWorkflow["run"]>().mockResolvedValue(result),
   };
 }
 
+function createScanner(input: { hasArchitectBrief?: boolean; tasks?: ReadyArchitectureTask[] } = {}) {
+  return {
+    findReadyForArchitectureTasks: vi
+      .fn<ReadyArchitectureTaskScanner["findReadyForArchitectureTasks"]>()
+      .mockResolvedValue(input.tasks ?? [readyTask]),
+    hasArchitectBrief: vi
+      .fn<ReadyArchitectureTaskScanner["hasArchitectBrief"]>()
+      .mockResolvedValue(input.hasArchitectBrief ?? false),
+  };
+}
+
+function createTestApp(input: { scanner?: ReturnType<typeof createScanner>; workflow?: ReturnType<typeof createWorkflow> } = {}) {
+  return createAgentOfficeApp({
+    readyArchitectureScanner: input.scanner ?? createScanner(),
+    statusAfterWriteback: "Ready for Codex",
+    workflow: input.workflow ?? createWorkflow(workflowSuccess(true)),
+  });
+}
+
 describe("Agent Office API", () => {
   it("returns service health", async () => {
-    const app = createAgentOfficeApp({
-      statusAfterWriteback: "Ready for Codex",
-      workflow: createWorkflow({
-        brief,
-        dryRun: true,
-        ok: true,
-        pageId,
-        statusUpdated: false,
-        title: "Test task",
-        wroteToNotion: false,
-      }),
-    });
+    const app = createTestApp();
 
     const response = await app.inject({ method: "GET", url: "/health" });
 
@@ -56,7 +83,7 @@ describe("Agent Office API", () => {
       error: { message: "should not run" },
       ok: false,
     });
-    const app = createAgentOfficeApp({ statusAfterWriteback: "Ready for Codex", workflow });
+    const app = createTestApp({ workflow });
 
     const response = await app.inject({
       method: "POST",
@@ -73,16 +100,8 @@ describe("Agent Office API", () => {
   });
 
   it("runs the Architect workflow in dry-run mode without reporting writes", async () => {
-    const workflow = createWorkflow({
-      brief,
-      dryRun: true,
-      ok: true,
-      pageId,
-      statusUpdated: false,
-      title: "Test task",
-      wroteToNotion: false,
-    });
-    const app = createAgentOfficeApp({ statusAfterWriteback: "Ready for Codex", workflow });
+    const workflow = createWorkflow(workflowSuccess(true));
+    const app = createTestApp({ workflow });
 
     const response = await app.inject({
       method: "POST",
@@ -113,7 +132,7 @@ describe("Agent Office API", () => {
       ok: false,
       pageId,
     });
-    const app = createAgentOfficeApp({ statusAfterWriteback: "Ready for Codex", workflow });
+    const app = createTestApp({ workflow });
 
     const response = await app.inject({
       method: "POST",
@@ -126,6 +145,72 @@ describe("Agent Office API", () => {
       error: "Notion page not found",
       ok: false,
       taskId: pageId,
+    });
+
+    await app.close();
+  });
+
+  it("lists tasks ready for architecture", async () => {
+    const scanner = createScanner();
+    const app = createTestApp({ scanner });
+
+    const response = await app.inject({ method: "GET", url: "/agent-office/tasks/ready-for-architecture" });
+
+    expect(response.statusCode).toBe(200);
+    expect(scanner.findReadyForArchitectureTasks).toHaveBeenCalledOnce();
+    expect(response.json()).toEqual({
+      ok: true,
+      tasks: [readyTask],
+    });
+
+    await app.close();
+  });
+
+  it("runs ready architecture tasks in dry-run mode", async () => {
+    const scanner = createScanner();
+    const workflow = createWorkflow(workflowSuccess(true));
+    const app = createTestApp({ scanner, workflow });
+
+    const response = await app.inject({
+      method: "POST",
+      payload: { dryRun: true },
+      url: "/agent-office/run-ready-architecture",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(scanner.hasArchitectBrief).not.toHaveBeenCalled();
+    expect(workflow.run).toHaveBeenCalledWith({
+      dryRun: true,
+      pageId,
+      statusAfterWriteback: "Ready for Codex",
+    });
+    expect(response.json()).toMatchObject({
+      dryRun: true,
+      ok: true,
+      summary: { failed: 0, processed: 1, skipped: 0 },
+    });
+
+    await app.close();
+  });
+
+  it("skips real writeback when an Architect Brief already exists", async () => {
+    const scanner = createScanner({ hasArchitectBrief: true });
+    const workflow = createWorkflow(workflowSuccess(false));
+    const app = createTestApp({ scanner, workflow });
+
+    const response = await app.inject({
+      method: "POST",
+      payload: { dryRun: false },
+      url: "/agent-office/run-ready-architecture",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(scanner.hasArchitectBrief).toHaveBeenCalledWith(pageId);
+    expect(workflow.run).not.toHaveBeenCalled();
+    expect(response.json()).toMatchObject({
+      dryRun: false,
+      ok: true,
+      summary: { failed: 0, processed: 0, skipped: 1 },
     });
 
     await app.close();

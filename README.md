@@ -18,7 +18,7 @@ The long-term shape is an office-like system where specialized AI agents can hel
 Input:
 
 ```text
-Notion task page ID
+Notion task page ID or scanned Ready for Architecture tasks
 ```
 
 Action:
@@ -81,6 +81,67 @@ Expected response:
 }
 ```
 
+### List Ready Architecture Tasks
+
+Returns Notion AI Build Tasks where the configured Status property equals `Ready for Architecture`.
+
+```bash
+curl http://127.0.0.1:3000/agent-office/tasks/ready-for-architecture
+```
+
+Expected shape:
+
+```json
+{
+  "ok": true,
+  "tasks": [
+    {
+      "taskId": "<notion-page-id>",
+      "name": "Example task",
+      "status": "Ready for Architecture",
+      "priority": "High"
+    }
+  ]
+}
+```
+
+### Run Ready Architecture Tasks
+
+Dry-run every task currently marked `Ready for Architecture`:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/run-ready-architecture \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun":true}'
+```
+
+Real writeback for every task currently marked `Ready for Architecture`:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/run-ready-architecture \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun":false}'
+```
+
+Expected summary shape:
+
+```json
+{
+  "ok": true,
+  "dryRun": true,
+  "summary": {
+    "processed": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "processed": [],
+  "skipped": [],
+  "failed": []
+}
+```
+
+For real runs, the API checks whether the task page already contains an `Architect Brief:` marker before invoking the workflow. If it does, that task is skipped to avoid duplicate writebacks.
+
 ### Architect Review Dry Run
 
 ```bash
@@ -115,14 +176,20 @@ A successful real writeback appends the Architect Brief to the same Notion page 
 
 ## Configuration
 
-See `.env.example` for required values. For the default v0 workflow, `NOTION_STATUS_AFTER_ARCHITECT` should match the exact Notion status option you want after writeback, usually `Ready for Codex`.
+See `.env.example` for required values. For the default v0 workflow:
 
-The Notion integration must have permission to read the task page, read page content, append blocks, and update the configured status property.
+- `NOTION_TASK_DATABASE_ID` should be the AI Build Tasks database ID.
+- `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
+- `NOTION_STATUS_AFTER_ARCHITECT` should match the exact Notion status option you want after writeback, usually `Ready for Codex`.
+
+The Notion integration must have permission to read the task database, read task page content, append blocks, and update the configured status property.
 
 ## Safety Model
 
 The Architect Agent does not receive tools that can mutate external systems. It only returns a structured `ArchitectBrief`. The TypeScript workflow owns side effects and performs Notion writes in a fixed order.
 
 The HTTP API is intentionally thin: it validates requests, calls the existing workflow layer, and returns JSON. It does not duplicate Notion write logic.
+
+The Ready for Architecture scanner only queries Notion and returns task metadata. Batch-running ready tasks still delegates each task to the existing Architect workflow.
 
 This keeps the v0 path simple while leaving room for later approval gates, additional agent roles, GitHub/Vercel coordination, Claude review, Codex handoff, QA, and release-note workflows.
