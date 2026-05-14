@@ -1,5 +1,7 @@
 import { Client } from "@notionhq/client";
 
-export function createNotionClient(auth: string): Client {
-  return new Client({ auth });
+import type { NotionClientLike } from "./notion-types.js";
+
+export function createNotionClient(auth: string): NotionClientLike {
+  return new Client({ auth }) as unknown as NotionClientLike;
 }
