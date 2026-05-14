@@ -20,6 +20,7 @@ export const AppEnvSchema = z.object({
   NOTION_TOKEN: z.string().min(1, "NOTION_TOKEN is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
   OPENAI_MODEL: z.string().min(1).default("gpt-5.4"),
+  RUN_LOG_PATH: z.string().min(1).default("data/run-log.jsonl"),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;
