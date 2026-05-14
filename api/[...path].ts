@@ -6,6 +6,8 @@ import { createConfiguredAgentOfficeApp } from "../src/server/create-configured-
 const VERCEL_API_PREFIX = "/api";
 const VERCEL_RUN_LOG_PATH = "/tmp/agent-office-run-log.jsonl";
 
+type InjectHttpMethod = "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT";
+
 let appPromise: Promise<FastifyInstance> | undefined;
 
 function loadVercelEnv() {
@@ -15,10 +17,17 @@ function loadVercelEnv() {
   });
 }
 
+function toInjectMethod(method: string): InjectHttpMethod {
+  return method.toUpperCase() as InjectHttpMethod;
+}
+
 async function getApp(): Promise<FastifyInstance> {
   if (!appPromise) {
-    const app = createConfiguredAgentOfficeApp(loadVercelEnv());
-    appPromise = app.ready().then(() => app);
+    appPromise = (async () => {
+      const app = createConfiguredAgentOfficeApp(loadVercelEnv());
+      await app.ready();
+      return app;
+    })();
   }
 
   return appPromise;
@@ -80,7 +89,7 @@ export default {
     const app = await getApp();
     const response = await app.inject({
       headers: toRequestHeaders(request.headers),
-      method: request.method,
+      method: toInjectMethod(request.method),
       payload: await toRequestPayload(request),
       url: toFastifyInjectUrl(request.url),
     });
