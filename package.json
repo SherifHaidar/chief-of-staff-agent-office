@@ -8,6 +8,7 @@
   },
   "scripts": {
     "architect": "tsx src/cli/run-architect-task.ts",
+    "cli": "tsx src/cli/run-architect-task.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "tsc --noEmit"
