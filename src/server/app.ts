@@ -1,6 +1,10 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 
+import type { RunLog } from "../audit/run-log.js";
+import { noopRunLog } from "../audit/run-log.js";
+import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
+import { createRunId } from "../audit/run-summary.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import type { ArchitectTaskWorkflowInput } from "../workflows/architect-task.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
@@ -16,6 +20,7 @@ export type ReadyArchitectureTaskScanner = {
 
 export type AgentOfficeAppOptions = {
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
+  runLog?: RunLog;
   statusAfterWriteback: string;
   workflow: ArchitectReviewWorkflow;
 };
@@ -70,8 +75,73 @@ function workflowErrorStatus(errorMessage: string): number {
   return errorMessage.startsWith("Invalid Notion page ID") ? 400 : 500;
 }
 
+function buildRunSummary(input: {
+  dryRun: boolean;
+  error?: string;
+  finishedAt: Date;
+  reason?: string;
+  result?: WorkflowResult;
+  runId: string;
+  startedAt: Date;
+  taskId: string;
+  taskName?: string;
+}): AgentOfficeRunSummary {
+  if (input.reason) {
+    return {
+      briefGenerated: false,
+      dryRun: input.dryRun,
+      finishedAt: input.finishedAt.toISOString(),
+      notionWriteback: false,
+      outcome: "skipped",
+      reason: input.reason,
+      runId: input.runId,
+      startedAt: input.startedAt.toISOString(),
+      statusUpdated: false,
+      taskId: input.taskId,
+      taskName: input.taskName,
+      workflow: "architect-review",
+    };
+  }
+
+  if (!input.result?.ok) {
+    return {
+      briefGenerated: false,
+      dryRun: input.dryRun,
+      error: input.error ?? input.result?.error.message ?? "Architect workflow failed.",
+      finishedAt: input.finishedAt.toISOString(),
+      notionWriteback: false,
+      outcome: "failed",
+      runId: input.runId,
+      startedAt: input.startedAt.toISOString(),
+      statusUpdated: false,
+      taskId: input.result?.pageId ?? input.taskId,
+      taskName: input.taskName,
+      workflow: "architect-review",
+    };
+  }
+
+  return {
+    briefGenerated: Boolean(input.result.brief),
+    dryRun: input.result.dryRun,
+    finishedAt: input.finishedAt.toISOString(),
+    notionWriteback: input.result.wroteToNotion,
+    outcome: "succeeded",
+    runId: input.runId,
+    startedAt: input.startedAt.toISOString(),
+    statusUpdated: input.result.statusUpdated,
+    taskId: input.result.pageId,
+    taskName: input.taskName ?? input.result.title,
+    workflow: "architect-review",
+  };
+}
+
+async function recordRun(runLog: RunLog, summary: AgentOfficeRunSummary): Promise<void> {
+  await runLog.record(summary);
+}
+
 export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyInstance {
   const app = Fastify({ logger: false });
+  const runLog = options.runLog ?? noopRunLog;
 
   app.setErrorHandler((error, request, reply) =>
     reply.code(getHttpStatusCode(error)).send({
@@ -108,16 +178,27 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     }
 
     const { dryRun, taskId } = parsed.data;
+    const startedAt = new Date();
     const result = await options.workflow.run({
       dryRun,
       pageId: taskId,
       statusAfterWriteback: options.statusAfterWriteback,
     });
+    const run = buildRunSummary({
+      dryRun,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId,
+    });
+    await recordRun(runLog, run);
 
     if (!result.ok) {
       return reply.code(workflowErrorStatus(result.error.message)).send({
         error: result.error.message,
         ok: false,
+        run,
         taskId: result.pageId ?? taskId,
       });
     }
@@ -126,6 +207,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       briefGenerated: Boolean(result.brief),
       dryRun: result.dryRun,
       ok: true,
+      run,
       statusUpdated: result.statusUpdated,
       taskId: result.pageId,
     });
@@ -143,27 +225,55 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
 
     const { dryRun } = parsed.data;
     const tasks = await options.readyArchitectureScanner.findReadyForArchitectureTasks();
-    const processed: Array<{ briefGenerated: boolean; statusUpdated: boolean; taskId: string; taskName: string }> = [];
-    const skipped: Array<{ reason: string; taskId: string; taskName: string }> = [];
-    const failed: Array<{ error: string; taskId: string; taskName: string }> = [];
+    const runs: AgentOfficeRunSummary[] = [];
+    const processed: Array<{ briefGenerated: boolean; runId: string; statusUpdated: boolean; taskId: string; taskName: string }> = [];
+    const skipped: Array<{ reason: string; runId: string; taskId: string; taskName: string }> = [];
+    const failed: Array<{ error: string; runId: string; taskId: string; taskName: string }> = [];
 
     for (const task of tasks) {
+      const startedAt = new Date();
+      const runId = createRunId(startedAt);
+
       if (!dryRun) {
         try {
           const alreadyHasBrief = await options.readyArchitectureScanner.hasArchitectBrief(task.taskId);
 
           if (alreadyHasBrief) {
-            skipped.push({
+            const run = buildRunSummary({
+              dryRun,
+              finishedAt: new Date(),
               reason: "Architect Brief already exists on task page.",
+              runId,
+              startedAt,
               taskId: task.taskId,
+              taskName: task.name,
+            });
+            await recordRun(runLog, run);
+            runs.push(run);
+            skipped.push({
+              reason: run.reason ?? "Skipped.",
+              runId: run.runId,
+              taskId: run.taskId,
               taskName: task.name,
             });
             continue;
           }
         } catch (error) {
-          failed.push({
+          const run = buildRunSummary({
+            dryRun,
             error: getErrorMessage(error),
+            finishedAt: new Date(),
+            runId,
+            startedAt,
             taskId: task.taskId,
+            taskName: task.name,
+          });
+          await recordRun(runLog, run);
+          runs.push(run);
+          failed.push({
+            error: run.error ?? "Failed.",
+            runId: run.runId,
+            taskId: run.taskId,
             taskName: task.name,
           });
           continue;
@@ -175,20 +285,33 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
         pageId: task.taskId,
         statusAfterWriteback: options.statusAfterWriteback,
       });
+      const run = buildRunSummary({
+        dryRun,
+        finishedAt: new Date(),
+        result,
+        runId,
+        startedAt,
+        taskId: task.taskId,
+        taskName: task.name,
+      });
+      await recordRun(runLog, run);
+      runs.push(run);
 
       if (!result.ok) {
         failed.push({
-          error: result.error.message,
-          taskId: result.pageId ?? task.taskId,
+          error: run.error ?? result.error.message,
+          runId: run.runId,
+          taskId: run.taskId,
           taskName: task.name,
         });
         continue;
       }
 
       processed.push({
-        briefGenerated: Boolean(result.brief),
-        statusUpdated: result.statusUpdated,
-        taskId: result.pageId,
+        briefGenerated: run.briefGenerated,
+        runId: run.runId,
+        statusUpdated: run.statusUpdated,
+        taskId: run.taskId,
         taskName: task.name,
       });
     }
@@ -198,6 +321,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       failed,
       ok: failed.length === 0,
       processed,
+      runs,
       skipped,
       summary: {
         failed: failed.length,
