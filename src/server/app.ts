@@ -50,7 +50,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
   app.setErrorHandler((error, request, reply) => {
     const statusCode = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 500;
 
-    return reply.status(statusCode).send({
+    return reply.code(statusCode).send({
       error: error.message || "Unexpected server error.",
       ok: false,
       taskId: getTaskIdFromBody(request.body),
@@ -67,7 +67,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     const parsed = ArchitectReviewRequestSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      return reply.status(400).send({
+      return reply.code(400).send({
         error: formatValidationError(parsed.error),
         ok: false,
         taskId: getTaskIdFromBody(request.body),
@@ -82,7 +82,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     });
 
     if (!result.ok) {
-      return reply.status(workflowErrorStatus(result.error.message)).send({
+      return reply.code(workflowErrorStatus(result.error.message)).send({
         error: result.error.message,
         ok: false,
         taskId: result.pageId ?? taskId,
