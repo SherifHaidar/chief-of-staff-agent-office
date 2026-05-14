@@ -18,9 +18,9 @@ const brief: ArchitectBrief = {
   risks: [],
 };
 
-function createWorkflow(result: WorkflowResult): ArchitectReviewWorkflow & { run: ReturnType<typeof vi.fn> } {
+function createWorkflow(result: WorkflowResult) {
   return {
-    run: vi.fn().mockResolvedValue(result),
+    run: vi.fn<ArchitectReviewWorkflow["run"]>().mockResolvedValue(result),
   };
 }
 
