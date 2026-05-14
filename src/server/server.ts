@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 
+import { JsonlRunLog } from "../audit/run-log.js";
 import { loadEnv } from "../config/env.js";
 import { createArchitectTaskWorkflow, createNotionTaskRepository } from "../index.js";
 import { createAgentOfficeApp } from "./app.js";
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
         }),
       hasArchitectBrief: (taskId) => taskRepository.hasArchitectBrief(taskId),
     },
+    runLog: new JsonlRunLog(env.RUN_LOG_PATH),
     statusAfterWriteback: env.NOTION_STATUS_AFTER_ARCHITECT,
     workflow: createArchitectTaskWorkflow(env),
   });
@@ -45,6 +47,7 @@ async function main(): Promise<void> {
 
   await app.listen({ host, port });
   console.log(`Agent Office API listening on http://${host}:${port}`);
+  console.log(`Agent Office run log: ${env.RUN_LOG_PATH}`);
 }
 
 main().catch((error: unknown) => {
