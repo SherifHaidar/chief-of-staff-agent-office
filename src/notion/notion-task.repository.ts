@@ -1,10 +1,17 @@
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
 import { chunkBlocks, renderArchitectBriefBlocks } from "./notion-block-renderer.js";
 import type { NotionAppendBlock, NotionClientLike, NotionTaskRepositoryConfig } from "./notion-types.js";
 
 type ListBlocksResponse = {
+  has_more?: boolean;
+  next_cursor?: string | null;
+  results?: unknown[];
+};
+
+type QueryDatabaseResponse = {
   has_more?: boolean;
   next_cursor?: string | null;
   results?: unknown[];
@@ -16,6 +23,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
 }
 
 function richTextToPlainText(value: unknown): string {
@@ -50,18 +61,59 @@ function extractTitle(properties: Record<string, unknown>): string {
   return "Untitled Notion task";
 }
 
+function extractNamedOption(property: Record<string, unknown>, type: "select" | "status"): string | undefined {
+  return asString(asRecord(property[type]).name);
+}
+
+function extractPriority(properties: Record<string, unknown>): number | string | undefined {
+  const priorityEntry = Object.entries(properties).find(([name]) => name.toLowerCase() === "priority");
+  if (!priorityEntry) {
+    return undefined;
+  }
+
+  const property = asRecord(priorityEntry[1]);
+
+  switch (property.type) {
+    case "number":
+      return asNumber(property.number);
+    case "select":
+      return extractNamedOption(property, "select");
+    case "status":
+      return extractNamedOption(property, "status");
+    case "rich_text": {
+      const value = richTextToPlainText(property.rich_text);
+      return value || undefined;
+    }
+    case "title": {
+      const value = richTextToPlainText(property.title);
+      return value || undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 function extractStatus(properties: Record<string, unknown>, statusPropertyName: string): string | undefined {
   const statusProperty = asRecord(properties[statusPropertyName]);
 
   if (statusProperty.type === "status") {
-    return asString(asRecord(statusProperty.status).name);
+    return extractNamedOption(statusProperty, "status");
   }
 
   if (statusProperty.type === "select") {
-    return asString(asRecord(statusProperty.select).name);
+    return extractNamedOption(statusProperty, "select");
   }
 
   return undefined;
+}
+
+function statusFilter(statusPropertyName: string, statusPropertyType: "select" | "status", statusName: string) {
+  return {
+    property: statusPropertyName,
+    [statusPropertyType]: {
+      equals: statusName,
+    },
+  };
 }
 
 export class NotionTaskRepository {
@@ -83,6 +135,52 @@ export class NotionTaskRepository {
       title: extractTitle(properties),
       url: asString(page.url),
     };
+  }
+
+  async findReadyForArchitectureTasks(input: { databaseId: string; statusName: string }): Promise<ReadyArchitectureTask[]> {
+    const tasks: ReadyArchitectureTask[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = (await this.client.databases.query({
+        database_id: input.databaseId,
+        filter: statusFilter(this.config.statusPropertyName, this.config.statusPropertyType, input.statusName),
+        page_size: 100,
+        start_cursor: cursor,
+      })) as QueryDatabaseResponse;
+
+      for (const page of response.results ?? []) {
+        const record = asRecord(page);
+        const rawPageId = asString(record.id);
+        if (!rawPageId) {
+          continue;
+        }
+
+        const properties = asRecord(record.properties);
+        const task: ReadyArchitectureTask = {
+          name: extractTitle(properties),
+          status: extractStatus(properties, this.config.statusPropertyName) ?? input.statusName,
+          taskId: normalizeNotionPageId(rawPageId),
+        };
+        const priority = extractPriority(properties);
+
+        if (priority !== undefined) {
+          task.priority = priority;
+        }
+
+        tasks.push(task);
+      }
+
+      cursor = response.next_cursor ?? undefined;
+    } while (cursor);
+
+    return tasks;
+  }
+
+  async hasArchitectBrief(pageId: string): Promise<boolean> {
+    const task = await this.fetchTask(pageId);
+
+    return task.contentMarkdown.includes("Architect Brief:");
   }
 
   async appendArchitectBrief(pageId: string, brief: ArchitectBrief, generatedAt: Date): Promise<void> {
