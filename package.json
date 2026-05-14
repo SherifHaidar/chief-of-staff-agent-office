@@ -9,6 +9,8 @@
   "scripts": {
     "architect": "tsx src/cli/run-architect-task.ts",
     "cli": "tsx src/cli/run-architect-task.ts",
+    "dev": "tsx watch src/server/server.ts",
+    "server": "tsx src/server/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "tsc --noEmit"
@@ -17,6 +19,7 @@
     "@notionhq/client": "^2.3.0",
     "@openai/agents": "^0.8.3",
     "dotenv": "^16.4.7",
+    "fastify": "^5.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
