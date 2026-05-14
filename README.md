@@ -28,6 +28,7 @@ Action:
 3. Render the Architect Brief into Notion blocks.
 4. Append the brief to the same page.
 5. Update the task status after successful writeback.
+6. Record a lightweight run summary for traceability.
 
 Output:
 
@@ -136,7 +137,8 @@ Expected summary shape:
   },
   "processed": [],
   "skipped": [],
-  "failed": []
+  "failed": [],
+  "runs": []
 }
 ```
 
@@ -158,7 +160,19 @@ Expected shape:
   "taskId": "<notion-page-id>",
   "dryRun": true,
   "statusUpdated": false,
-  "briefGenerated": true
+  "briefGenerated": true,
+  "run": {
+    "runId": "run_...",
+    "workflow": "architect-review",
+    "taskId": "<notion-page-id>",
+    "dryRun": true,
+    "outcome": "succeeded",
+    "briefGenerated": true,
+    "notionWriteback": false,
+    "statusUpdated": false,
+    "startedAt": "2026-05-14T12:00:00.000Z",
+    "finishedAt": "2026-05-14T12:00:01.000Z"
+  }
 }
 ```
 
@@ -174,6 +188,35 @@ curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
 
 A successful real writeback appends the Architect Brief to the same Notion page and updates the configured status property after the append succeeds.
 
+## Run Log
+
+The API records one JSON object per Architect workflow run to the configured JSONL file. By default:
+
+```text
+data/run-log.jsonl
+```
+
+Each line is a run summary with:
+
+- `runId`
+- `workflow`
+- `taskId` and optional `taskName`
+- `dryRun`
+- `outcome`: `succeeded`, `failed`, or `skipped`
+- `briefGenerated`
+- `notionWriteback`
+- `statusUpdated`
+- `error` or `reason`, when applicable
+- `startedAt` and `finishedAt`
+
+Inspect it locally with:
+
+```bash
+tail -n 20 data/run-log.jsonl
+```
+
+The run log is intentionally local and append-only for now. It is not committed to Git and is not a Notion database.
+
 ## Configuration
 
 See `.env.example` for required values. For the default v0 workflow:
@@ -181,6 +224,7 @@ See `.env.example` for required values. For the default v0 workflow:
 - `NOTION_TASK_DATABASE_ID` should be the AI Build Tasks database ID.
 - `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
 - `NOTION_STATUS_AFTER_ARCHITECT` should match the exact Notion status option you want after writeback, usually `Ready for Codex`.
+- `RUN_LOG_PATH` should point to the local JSONL audit file, usually `data/run-log.jsonl`.
 
 The Notion integration must have permission to read the task database, read task page content, append blocks, and update the configured status property.
 
@@ -188,7 +232,7 @@ The Notion integration must have permission to read the task database, read task
 
 The Architect Agent does not receive tools that can mutate external systems. It only returns a structured `ArchitectBrief`. The TypeScript workflow owns side effects and performs Notion writes in a fixed order.
 
-The HTTP API is intentionally thin: it validates requests, calls the existing workflow layer, and returns JSON. It does not duplicate Notion write logic.
+The HTTP API is intentionally thin: it validates requests, calls the existing workflow layer, records run summaries, and returns JSON. It does not duplicate Notion write logic.
 
 The Ready for Architecture scanner only queries Notion and returns task metadata. Batch-running ready tasks still delegates each task to the existing Architect workflow.
 

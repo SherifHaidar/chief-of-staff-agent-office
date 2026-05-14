@@ -7,6 +7,8 @@ import { consoleLogger } from "./utils/logger.js";
 import { ArchitectTaskWorkflow } from "./workflows/architect-task.workflow.js";
 
 export * from "./agents/architect.agent.js";
+export * from "./audit/run-log.js";
+export * from "./audit/run-summary.js";
 export * from "./config/env.js";
 export * from "./domain/ai-build-task.js";
 export * from "./domain/architect-brief.js";
