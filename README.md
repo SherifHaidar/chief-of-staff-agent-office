@@ -13,6 +13,10 @@ Notion AI Build Task
 
 The long-term shape is an office-like system where specialized AI agents can help with architecture, implementation planning, review, QA, release notes, and eventually GitHub/Vercel coordination while the human remains the final approver.
 
+## Notion Operating Contract
+
+The Notion-side board contract is documented in [docs/notion-operating-contract.md](docs/notion-operating-contract.md). Treat that spec as the integration contract for AI Build Tasks, Build Room Dashboard views, status transitions, duplicate-processing policy, and human approval gates.
+
 ## v0 Scope
 
 Input:
@@ -222,6 +226,7 @@ The run log is intentionally local and append-only for now. It is not committed 
 See `.env.example` for required values. For the default v0 workflow:
 
 - `NOTION_TASK_DATABASE_ID` should be the AI Build Tasks database ID.
+- `NOTION_STATUS_PROPERTY_TYPE` should match the Notion property type for the configured status property. The current AI Build Tasks board uses `select`; use `status` only if the Notion property is converted to a native Notion status property.
 - `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
 - `NOTION_STATUS_AFTER_ARCHITECT` should match the exact Notion status option you want after writeback, usually `Ready for Codex`.
 - `RUN_LOG_PATH` should point to the local JSONL audit file, usually `data/run-log.jsonl`.

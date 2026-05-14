@@ -15,7 +15,7 @@ export const AppEnvSchema = z.object({
   NOTION_READY_FOR_ARCHITECTURE_STATUS: z.string().min(1).default("Ready for Architecture"),
   NOTION_STATUS_AFTER_ARCHITECT: z.string().min(1).default("Ready for Codex"),
   NOTION_STATUS_PROPERTY: z.string().min(1).default("Status"),
-  NOTION_STATUS_PROPERTY_TYPE: z.enum(["status", "select"]).default("status"),
+  NOTION_STATUS_PROPERTY_TYPE: z.enum(["status", "select"]).default("select"),
   NOTION_TASK_DATABASE_ID: z.string().optional(),
   NOTION_TOKEN: z.string().min(1, "NOTION_TOKEN is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
