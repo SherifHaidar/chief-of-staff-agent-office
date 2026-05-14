@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { InMemoryRunLog } from "../../src/audit/run-log.js";
 import type { ArchitectBrief } from "../../src/domain/architect-brief.js";
 import type { ReadyArchitectureTask } from "../../src/domain/ready-architecture-task.js";
 import { createAgentOfficeApp, type ArchitectReviewWorkflow, type ReadyArchitectureTaskScanner } from "../../src/server/app.js";
@@ -54,9 +55,16 @@ function createScanner(input: { hasArchitectBrief?: boolean; tasks?: ReadyArchit
   };
 }
 
-function createTestApp(input: { scanner?: ReturnType<typeof createScanner>; workflow?: ReturnType<typeof createWorkflow> } = {}) {
+function createTestApp(
+  input: {
+    runLog?: InMemoryRunLog;
+    scanner?: ReturnType<typeof createScanner>;
+    workflow?: ReturnType<typeof createWorkflow>;
+  } = {},
+) {
   return createAgentOfficeApp({
     readyArchitectureScanner: input.scanner ?? createScanner(),
+    runLog: input.runLog,
     statusAfterWriteback: "Ready for Codex",
     workflow: input.workflow ?? createWorkflow(workflowSuccess(true)),
   });
@@ -83,7 +91,8 @@ describe("Agent Office API", () => {
       error: { message: "should not run" },
       ok: false,
     });
-    const app = createTestApp({ workflow });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
       method: "POST",
@@ -95,19 +104,22 @@ describe("Agent Office API", () => {
     expect(response.json()).toMatchObject({ ok: false });
     expect(response.json().error).toContain("taskId");
     expect(workflow.run).not.toHaveBeenCalled();
+    expect(runLog.records).toHaveLength(0);
 
     await app.close();
   });
 
-  it("runs the Architect workflow in dry-run mode without reporting writes", async () => {
+  it("runs the Architect workflow in dry-run mode and records a run summary", async () => {
     const workflow = createWorkflow(workflowSuccess(true));
-    const app = createTestApp({ workflow });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
       method: "POST",
       payload: { dryRun: true, taskId: pageId },
       url: "/agent-office/architect-review",
     });
+    const body = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(workflow.run).toHaveBeenCalledWith({
@@ -115,37 +127,60 @@ describe("Agent Office API", () => {
       pageId,
       statusAfterWriteback: "Ready for Codex",
     });
-    expect(response.json()).toEqual({
+    expect(body).toMatchObject({
       briefGenerated: true,
       dryRun: true,
       ok: true,
+      run: {
+        briefGenerated: true,
+        dryRun: true,
+        notionWriteback: false,
+        outcome: "succeeded",
+        statusUpdated: false,
+        taskId: pageId,
+        taskName: "Test task",
+        workflow: "architect-review",
+      },
       statusUpdated: false,
       taskId: pageId,
     });
+    expect(body.run.runId).toEqual(expect.any(String));
+    expect(runLog.records).toEqual([body.run]);
 
     await app.close();
   });
 
-  it("returns a clear workflow error response", async () => {
+  it("returns and records a clear workflow error response", async () => {
     const workflow = createWorkflow({
       error: { message: "Notion page not found" },
       ok: false,
       pageId,
     });
-    const app = createTestApp({ workflow });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
       method: "POST",
       payload: { dryRun: false, taskId: pageId },
       url: "/agent-office/architect-review",
     });
+    const body = response.json();
 
     expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({
+    expect(body).toMatchObject({
       error: "Notion page not found",
       ok: false,
+      run: {
+        dryRun: false,
+        error: "Notion page not found",
+        notionWriteback: false,
+        outcome: "failed",
+        statusUpdated: false,
+        taskId: pageId,
+      },
       taskId: pageId,
     });
+    expect(runLog.records).toEqual([body.run]);
 
     await app.close();
   });
@@ -166,16 +201,18 @@ describe("Agent Office API", () => {
     await app.close();
   });
 
-  it("runs ready architecture tasks in dry-run mode", async () => {
+  it("runs ready architecture tasks in dry-run mode and records per-task summaries", async () => {
     const scanner = createScanner();
     const workflow = createWorkflow(workflowSuccess(true));
-    const app = createTestApp({ scanner, workflow });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, scanner, workflow });
 
     const response = await app.inject({
       method: "POST",
       payload: { dryRun: true },
       url: "/agent-office/run-ready-architecture",
     });
+    const body = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(scanner.hasArchitectBrief).not.toHaveBeenCalled();
@@ -184,34 +221,59 @@ describe("Agent Office API", () => {
       pageId,
       statusAfterWriteback: "Ready for Codex",
     });
-    expect(response.json()).toMatchObject({
+    expect(body).toMatchObject({
       dryRun: true,
       ok: true,
+      runs: [
+        {
+          dryRun: true,
+          notionWriteback: false,
+          outcome: "succeeded",
+          statusUpdated: false,
+          taskId: pageId,
+          taskName: "Test task",
+        },
+      ],
       summary: { failed: 0, processed: 1, skipped: 0 },
     });
+    expect(runLog.records).toEqual(body.runs);
 
     await app.close();
   });
 
-  it("skips real writeback when an Architect Brief already exists", async () => {
+  it("records skipped real writebacks when an Architect Brief already exists", async () => {
     const scanner = createScanner({ hasArchitectBrief: true });
     const workflow = createWorkflow(workflowSuccess(false));
-    const app = createTestApp({ scanner, workflow });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, scanner, workflow });
 
     const response = await app.inject({
       method: "POST",
       payload: { dryRun: false },
       url: "/agent-office/run-ready-architecture",
     });
+    const body = response.json();
 
     expect(response.statusCode).toBe(200);
     expect(scanner.hasArchitectBrief).toHaveBeenCalledWith(pageId);
     expect(workflow.run).not.toHaveBeenCalled();
-    expect(response.json()).toMatchObject({
+    expect(body).toMatchObject({
       dryRun: false,
       ok: true,
+      runs: [
+        {
+          dryRun: false,
+          notionWriteback: false,
+          outcome: "skipped",
+          reason: "Architect Brief already exists on task page.",
+          statusUpdated: false,
+          taskId: pageId,
+          taskName: "Test task",
+        },
+      ],
       summary: { failed: 0, processed: 0, skipped: 1 },
     });
+    expect(runLog.records).toEqual(body.runs);
 
     await app.close();
   });
