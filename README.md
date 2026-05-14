@@ -216,9 +216,92 @@ curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
 
 A successful real writeback appends the Architect Brief to the same Notion page and updates the configured status property after the append succeeds.
 
+## Vercel Deployment Preparation
+
+This repo includes a thin Vercel function adapter at `api/[...path].ts` and minimal rewrites in `vercel.json`. The deployed public routes stay the same as local development:
+
+```text
+/health
+/agent-office/*
+```
+
+The core Fastify app remains portable in `src/server/app.ts`. Local Node hosting still starts through `src/server/server.ts`, while Vercel requests are injected into the same Fastify app without calling `listen()`.
+
+This repository does not include deployment automation yet. Connect the GitHub repo to Vercel or deploy manually only after reviewing the safety checklist.
+
+### Vercel Environment Variables
+
+Required Vercel environment variables:
+
+- `OPENAI_API_KEY`
+- `NOTION_TOKEN`
+- `NOTION_TASK_DATABASE_ID`
+- `AGENT_OFFICE_API_KEY`
+
+Recommended explicit Vercel environment variables:
+
+- `OPENAI_MODEL=gpt-5.4`
+- `NOTION_STATUS_PROPERTY=Status`
+- `NOTION_STATUS_PROPERTY_TYPE=select`
+- `NOTION_READY_FOR_ARCHITECTURE_STATUS=Ready for Architecture`
+- `NOTION_STATUS_AFTER_ARCHITECT=Ready for Codex`
+- `NOTION_MAX_READ_DEPTH=3`
+- `RUN_LOG_PATH=/tmp/agent-office-run-log.jsonl`
+- `DRY_RUN=false`
+- `LOG_LEVEL=info`
+
+Use a long random value for `AGENT_OFFICE_API_KEY`. Do not expose it in frontend code, commit it to Git, or paste it into Notion task content.
+
+For runtime parity with CI, use Node.js 20 or newer. Node 20 is the current CI baseline.
+
+### Vercel Smoke Tests
+
+Set local shell variables first:
+
+```bash
+export DEPLOYMENT_URL="https://<your-vercel-deployment-url>"
+export AGENT_OFFICE_API_KEY="<your-agent-office-api-key>"
+```
+
+Check public health:
+
+```bash
+curl "$DEPLOYMENT_URL/health"
+```
+
+Expected: `ok: true` and no sensitive configuration values.
+
+Confirm protected routes reject missing API keys:
+
+```bash
+curl -i "$DEPLOYMENT_URL/agent-office/tasks/ready-for-architecture"
+```
+
+Expected: HTTP `401` with `{ "ok": false, "error": "Unauthorized." }`.
+
+Confirm protected routes accept the configured API key:
+
+```bash
+curl "$DEPLOYMENT_URL/agent-office/tasks/ready-for-architecture" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY"
+```
+
+Expected: HTTP `200` with `{ "ok": true, "tasks": [...] }`.
+
+Run the first live Architect review as a dry-run against one safe Notion test task:
+
+```bash
+curl -X POST "$DEPLOYMENT_URL/agent-office/architect-review" \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"taskId":"<safe-test-notion-page-id>","dryRun":true}'
+```
+
+Expected: `ok: true`, `briefGenerated: true`, `dryRun: true`, `statusUpdated: false`, and `run.notionWriteback: false`. After the dry-run, inspect the Notion task and confirm that no Architect Brief was appended and the Status did not change.
+
 ## Run Log
 
-The API records one JSON object per Architect workflow run to the configured JSONL file. By default:
+The API records one JSON object per Architect workflow run to the configured JSONL file. By default for local development:
 
 ```text
 data/run-log.jsonl
@@ -243,7 +326,7 @@ Inspect it locally with:
 tail -n 20 data/run-log.jsonl
 ```
 
-The run log is intentionally local and append-only for now. It is not committed to Git and is not a Notion database. On hosted platforms, do not treat the local JSONL file as durable audit storage unless the platform provides a persistent volume mounted at `RUN_LOG_PATH`.
+The run log is intentionally local and append-only for now. It is not committed to Git and is not a Notion database. On Vercel, the adapter defaults `RUN_LOG_PATH` to `/tmp/agent-office-run-log.jsonl` when the variable is not set. Treat `/tmp` and all hosted JSONL logs as ephemeral; use structured API responses and Vercel function logs for initial live traceability until a durable run store exists.
 
 ## Configuration
 
@@ -254,7 +337,7 @@ See `.env.example` for required values. For the default v0 workflow:
 - `NOTION_STATUS_PROPERTY_TYPE` should match the Notion property type for the configured status property. The current AI Build Tasks board uses `select`; use `status` only if the Notion property is converted to a native Notion status property.
 - `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
 - `NOTION_STATUS_AFTER_ARCHITECT` should match the exact Notion status option you want after writeback, usually `Ready for Codex`.
-- `RUN_LOG_PATH` should point to the local JSONL audit file, usually `data/run-log.jsonl`.
+- `RUN_LOG_PATH` should point to the local JSONL audit file, usually `data/run-log.jsonl`. On Vercel, use `/tmp/agent-office-run-log.jsonl` and treat it as ephemeral.
 
 The Notion integration must have permission to read the task database, read task page content, append blocks, and update the configured status property.
 
@@ -266,10 +349,11 @@ Before any hosted deployment:
 2. Use a long random `AGENT_OFFICE_API_KEY`; do not expose it in frontend code or commit it to Git.
 3. Confirm the Notion integration is scoped only to the intended AI Build Tasks database and task pages.
 4. Keep `/health` public but generic; all `/agent-office/*` routes must require the API key.
-5. Run a live dry-run against one safe test task before any real writeback.
-6. Run the first real writeback against one safe test task only after the dry-run output looks correct.
-7. Confirm the Architect Brief was appended and `Status` moved to `Ready for Codex`.
-8. Treat structured API responses and hosted platform logs as the first live traceability layer. Do not rely on local JSONL logs as durable hosted audit storage without a persistent volume or future database-backed run log.
+5. On Vercel, set `RUN_LOG_PATH` to `/tmp/agent-office-run-log.jsonl` or rely on the adapter default, and do not treat it as durable storage.
+6. Run a live dry-run against one safe test task before any real writeback.
+7. Run the first real writeback against one safe test task only after the dry-run output looks correct.
+8. Confirm the Architect Brief was appended and `Status` moved to `Ready for Codex`.
+9. Treat structured API responses and hosted platform logs as the first live traceability layer. Do not rely on local JSONL logs as durable hosted audit storage without a persistent volume or future database-backed run log.
 
 ## Safety Model
 
