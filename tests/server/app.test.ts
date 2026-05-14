@@ -6,6 +6,8 @@ import type { ReadyArchitectureTask } from "../../src/domain/ready-architecture-
 import { createAgentOfficeApp, type ArchitectReviewWorkflow, type ReadyArchitectureTaskScanner } from "../../src/server/app.js";
 import type { WorkflowResult } from "../../src/workflows/workflow-result.js";
 
+const apiKey = "test-agent-office-key";
+const authHeaders = { "x-agent-office-api-key": apiKey };
 const pageId = "11111111-1111-1111-1111-111111111111";
 const readyTask: ReadyArchitectureTask = {
   name: "Test task",
@@ -57,12 +59,14 @@ function createScanner(input: { hasArchitectBrief?: boolean; tasks?: ReadyArchit
 
 function createTestApp(
   input: {
+    apiKey?: string;
     runLog?: InMemoryRunLog;
     scanner?: ReturnType<typeof createScanner>;
     workflow?: ReturnType<typeof createWorkflow>;
   } = {},
 ) {
   return createAgentOfficeApp({
+    apiKey: input.apiKey ?? apiKey,
     readyArchitectureScanner: input.scanner ?? createScanner(),
     runLog: input.runLog,
     statusAfterWriteback: "Ready for Codex",
@@ -71,7 +75,7 @@ function createTestApp(
 }
 
 describe("Agent Office API", () => {
-  it("returns service health", async () => {
+  it("returns public service health without an API key", async () => {
     const app = createTestApp();
 
     const response = await app.inject({ method: "GET", url: "/health" });
@@ -86,6 +90,39 @@ describe("Agent Office API", () => {
     await app.close();
   });
 
+  it("rejects ready task requests without an API key", async () => {
+    const scanner = createScanner();
+    const app = createTestApp({ scanner });
+
+    const response = await app.inject({ method: "GET", url: "/agent-office/tasks/ready-for-architecture" });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Unauthorized.", ok: false });
+    expect(scanner.findReadyForArchitectureTasks).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("rejects architect review requests with an invalid API key", async () => {
+    const workflow = createWorkflow(workflowSuccess(true));
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ runLog, workflow });
+
+    const response = await app.inject({
+      headers: { "x-agent-office-api-key": "wrong-key" },
+      method: "POST",
+      payload: { dryRun: true, taskId: pageId },
+      url: "/agent-office/architect-review",
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Unauthorized.", ok: false });
+    expect(workflow.run).not.toHaveBeenCalled();
+    expect(runLog.records).toHaveLength(0);
+
+    await app.close();
+  });
+
   it("rejects architect review requests without a taskId", async () => {
     const workflow = createWorkflow({
       error: { message: "should not run" },
@@ -95,6 +132,7 @@ describe("Agent Office API", () => {
     const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
+      headers: authHeaders,
       method: "POST",
       payload: { dryRun: true },
       url: "/agent-office/architect-review",
@@ -115,6 +153,7 @@ describe("Agent Office API", () => {
     const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
+      headers: authHeaders,
       method: "POST",
       payload: { dryRun: true, taskId: pageId },
       url: "/agent-office/architect-review",
@@ -160,6 +199,7 @@ describe("Agent Office API", () => {
     const app = createTestApp({ runLog, workflow });
 
     const response = await app.inject({
+      headers: authHeaders,
       method: "POST",
       payload: { dryRun: false, taskId: pageId },
       url: "/agent-office/architect-review",
@@ -185,11 +225,15 @@ describe("Agent Office API", () => {
     await app.close();
   });
 
-  it("lists tasks ready for architecture", async () => {
+  it("lists tasks ready for architecture with a valid API key", async () => {
     const scanner = createScanner();
     const app = createTestApp({ scanner });
 
-    const response = await app.inject({ method: "GET", url: "/agent-office/tasks/ready-for-architecture" });
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "GET",
+      url: "/agent-office/tasks/ready-for-architecture",
+    });
 
     expect(response.statusCode).toBe(200);
     expect(scanner.findReadyForArchitectureTasks).toHaveBeenCalledOnce();
@@ -208,6 +252,7 @@ describe("Agent Office API", () => {
     const app = createTestApp({ runLog, scanner, workflow });
 
     const response = await app.inject({
+      headers: authHeaders,
       method: "POST",
       payload: { dryRun: true },
       url: "/agent-office/run-ready-architecture",
@@ -248,6 +293,7 @@ describe("Agent Office API", () => {
     const app = createTestApp({ runLog, scanner, workflow });
 
     const response = await app.inject({
+      headers: authHeaders,
       method: "POST",
       payload: { dryRun: false },
       url: "/agent-office/run-ready-architecture",

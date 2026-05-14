@@ -8,7 +8,16 @@ const stringBoolean = z.preprocess((value) => {
   return ["1", "true", "yes", "y"].includes(value.toLowerCase());
 }, z.boolean());
 
+const optionalNonEmptyString = z.preprocess((value) => {
+  if (value === "") {
+    return undefined;
+  }
+
+  return value;
+}, z.string().min(1).optional());
+
 export const AppEnvSchema = z.object({
+  AGENT_OFFICE_API_KEY: optionalNonEmptyString,
   DRY_RUN: stringBoolean.default(false),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   NOTION_MAX_READ_DEPTH: z.coerce.number().int().min(0).max(10).default(3),

@@ -26,9 +26,11 @@ function requiredConfig(value: string | undefined, name: string): string {
 
 async function main(): Promise<void> {
   const env = loadEnv();
+  const apiKey = requiredConfig(env.AGENT_OFFICE_API_KEY, "AGENT_OFFICE_API_KEY");
   const taskDatabaseId = requiredConfig(env.NOTION_TASK_DATABASE_ID, "NOTION_TASK_DATABASE_ID");
   const taskRepository = createNotionTaskRepository(env);
   const app = createAgentOfficeApp({
+    apiKey,
     readyArchitectureScanner: {
       findReadyForArchitectureTasks: () =>
         taskRepository.findReadyForArchitectureTasks({
