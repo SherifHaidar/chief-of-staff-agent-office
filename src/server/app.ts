@@ -75,6 +75,18 @@ function workflowErrorStatus(errorMessage: string): number {
   return errorMessage.startsWith("Invalid Notion page ID") ? 400 : 500;
 }
 
+function withOptionalFields(
+  summary: AgentOfficeRunSummary,
+  optional: { error?: string; reason?: string; taskName?: string },
+): AgentOfficeRunSummary {
+  return {
+    ...summary,
+    ...(optional.error ? { error: optional.error } : {}),
+    ...(optional.reason ? { reason: optional.reason } : {}),
+    ...(optional.taskName ? { taskName: optional.taskName } : {}),
+  };
+}
+
 function buildRunSummary(input: {
   dryRun: boolean;
   error?: string;
@@ -86,53 +98,57 @@ function buildRunSummary(input: {
   taskId: string;
   taskName?: string;
 }): AgentOfficeRunSummary {
-  if (input.reason) {
-    return {
-      briefGenerated: false,
-      dryRun: input.dryRun,
-      finishedAt: input.finishedAt.toISOString(),
-      notionWriteback: false,
-      outcome: "skipped",
-      reason: input.reason,
-      runId: input.runId,
-      startedAt: input.startedAt.toISOString(),
-      statusUpdated: false,
-      taskId: input.taskId,
-      taskName: input.taskName,
-      workflow: "architect-review",
-    };
-  }
-
-  if (!input.result?.ok) {
-    return {
-      briefGenerated: false,
-      dryRun: input.dryRun,
-      error: input.error ?? input.result?.error.message ?? "Architect workflow failed.",
-      finishedAt: input.finishedAt.toISOString(),
-      notionWriteback: false,
-      outcome: "failed",
-      runId: input.runId,
-      startedAt: input.startedAt.toISOString(),
-      statusUpdated: false,
-      taskId: input.result?.pageId ?? input.taskId,
-      taskName: input.taskName,
-      workflow: "architect-review",
-    };
-  }
-
-  return {
-    briefGenerated: Boolean(input.result.brief),
-    dryRun: input.result.dryRun,
+  const base = {
+    dryRun: input.dryRun,
     finishedAt: input.finishedAt.toISOString(),
-    notionWriteback: input.result.wroteToNotion,
-    outcome: "succeeded",
     runId: input.runId,
     startedAt: input.startedAt.toISOString(),
-    statusUpdated: input.result.statusUpdated,
-    taskId: input.result.pageId,
-    taskName: input.taskName ?? input.result.title,
-    workflow: "architect-review",
+    workflow: "architect-review" as const,
   };
+
+  if (input.reason) {
+    return withOptionalFields(
+      {
+        ...base,
+        briefGenerated: false,
+        notionWriteback: false,
+        outcome: "skipped",
+        statusUpdated: false,
+        taskId: input.taskId,
+      },
+      { reason: input.reason, taskName: input.taskName },
+    );
+  }
+
+  if (!input.result || !input.result.ok) {
+    const pageId = input.result && !input.result.ok ? input.result.pageId : undefined;
+    const error = input.error ?? (input.result && !input.result.ok ? input.result.error.message : undefined);
+
+    return withOptionalFields(
+      {
+        ...base,
+        briefGenerated: false,
+        notionWriteback: false,
+        outcome: "failed",
+        statusUpdated: false,
+        taskId: pageId ?? input.taskId,
+      },
+      { error: error ?? "Architect workflow failed.", taskName: input.taskName },
+    );
+  }
+
+  return withOptionalFields(
+    {
+      ...base,
+      briefGenerated: Boolean(input.result.brief),
+      dryRun: input.result.dryRun,
+      notionWriteback: input.result.wroteToNotion,
+      outcome: "succeeded",
+      statusUpdated: input.result.statusUpdated,
+      taskId: input.result.pageId,
+    },
+    { taskName: input.taskName ?? input.result.title },
+  );
 }
 
 async function recordRun(runLog: RunLog, summary: AgentOfficeRunSummary): Promise<void> {
