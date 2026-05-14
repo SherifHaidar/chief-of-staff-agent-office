@@ -72,6 +72,8 @@ The server listens on `127.0.0.1:3000` by default. You can override this with `H
 
 ### Health Check
 
+The health endpoint is intentionally public and generic.
+
 ```bash
 curl http://127.0.0.1:3000/health
 ```
@@ -86,12 +88,30 @@ Expected response:
 }
 ```
 
+### API Authentication
+
+All `/agent-office/*` endpoints require an API key. Set `AGENT_OFFICE_API_KEY` in `.env` and send it with the `x-agent-office-api-key` header:
+
+```bash
+export AGENT_OFFICE_API_KEY="<your-local-api-key>"
+```
+
+Requests with a missing or invalid key return:
+
+```json
+{
+  "ok": false,
+  "error": "Unauthorized."
+}
+```
+
 ### List Ready Architecture Tasks
 
 Returns Notion AI Build Tasks where the configured Status property equals `Ready for Architecture`.
 
 ```bash
-curl http://127.0.0.1:3000/agent-office/tasks/ready-for-architecture
+curl http://127.0.0.1:3000/agent-office/tasks/ready-for-architecture \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY"
 ```
 
 Expected shape:
@@ -117,6 +137,7 @@ Dry-run every task currently marked `Ready for Architecture`:
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/run-ready-architecture \
   -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"dryRun":true}'
 ```
 
@@ -125,6 +146,7 @@ Real writeback for every task currently marked `Ready for Architecture`:
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/run-ready-architecture \
   -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"dryRun":false}'
 ```
 
@@ -153,6 +175,7 @@ For real runs, the API checks whether the task page already contains an `Archite
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
   -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"taskId":"<notion-page-id>","dryRun":true}'
 ```
 
@@ -187,6 +210,7 @@ Only run this after the dry run looks correct:
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
   -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"taskId":"<notion-page-id>","dryRun":false}'
 ```
 
@@ -219,12 +243,13 @@ Inspect it locally with:
 tail -n 20 data/run-log.jsonl
 ```
 
-The run log is intentionally local and append-only for now. It is not committed to Git and is not a Notion database.
+The run log is intentionally local and append-only for now. It is not committed to Git and is not a Notion database. On hosted platforms, do not treat the local JSONL file as durable audit storage unless the platform provides a persistent volume mounted at `RUN_LOG_PATH`.
 
 ## Configuration
 
 See `.env.example` for required values. For the default v0 workflow:
 
+- `AGENT_OFFICE_API_KEY` is required to start the HTTP API server and must be sent as `x-agent-office-api-key` for every `/agent-office/*` request.
 - `NOTION_TASK_DATABASE_ID` should be the AI Build Tasks database ID.
 - `NOTION_STATUS_PROPERTY_TYPE` should match the Notion property type for the configured status property. The current AI Build Tasks board uses `select`; use `status` only if the Notion property is converted to a native Notion status property.
 - `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
@@ -233,11 +258,24 @@ See `.env.example` for required values. For the default v0 workflow:
 
 The Notion integration must have permission to read the task database, read task page content, append blocks, and update the configured status property.
 
+## Deployment Safety Checklist
+
+Before any hosted deployment:
+
+1. Configure `OPENAI_API_KEY`, `NOTION_TOKEN`, `NOTION_TASK_DATABASE_ID`, and `AGENT_OFFICE_API_KEY` as platform-managed environment variables or secrets.
+2. Use a long random `AGENT_OFFICE_API_KEY`; do not expose it in frontend code or commit it to Git.
+3. Confirm the Notion integration is scoped only to the intended AI Build Tasks database and task pages.
+4. Keep `/health` public but generic; all `/agent-office/*` routes must require the API key.
+5. Run a live dry-run against one safe test task before any real writeback.
+6. Run the first real writeback against one safe test task only after the dry-run output looks correct.
+7. Confirm the Architect Brief was appended and `Status` moved to `Ready for Codex`.
+8. Treat structured API responses and hosted platform logs as the first live traceability layer. Do not rely on local JSONL logs as durable hosted audit storage without a persistent volume or future database-backed run log.
+
 ## Safety Model
 
 The Architect Agent does not receive tools that can mutate external systems. It only returns a structured `ArchitectBrief`. The TypeScript workflow owns side effects and performs Notion writes in a fixed order.
 
-The HTTP API is intentionally thin: it validates requests, calls the existing workflow layer, records run summaries, and returns JSON. It does not duplicate Notion write logic.
+The HTTP API is intentionally thin: it validates requests, authorizes Agent Office routes, calls the existing workflow layer, records run summaries, and returns JSON. It does not duplicate Notion write logic.
 
 The Ready for Architecture scanner only queries Notion and returns task metadata. Batch-running ready tasks still delegates each task to the existing Architect workflow.
 
