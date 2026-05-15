@@ -62,6 +62,7 @@ describe("Vercel adapter", () => {
           destination: "/api/agent-office/tasks/ready-for-codex",
         },
         { source: "/agent-office/architect-review", destination: "/api/agent-office/architect-review" },
+        { source: "/agent-office/architect-review/revise", destination: "/api/agent-office/architect-review/revise" },
         { source: "/agent-office/architect-review/approve", destination: "/api/agent-office/architect-review/approve" },
         { source: "/agent-office/codex-handoff", destination: "/api/agent-office/codex-handoff" },
         { source: "/agent-office/codex-handoff/approve", destination: "/api/agent-office/codex-handoff/approve" },
