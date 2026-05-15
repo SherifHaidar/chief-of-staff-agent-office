@@ -38,6 +38,11 @@ export const AppEnvSchema = z.object({
   NOTION_TOKEN: z.string().min(1, "NOTION_TOKEN is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
   OPENAI_MODEL: z.string().min(1).default("gpt-5.4"),
+  PRODUCT_CONTEXT_MAX_FILE_CHARS: z.coerce.number().int().min(500).max(30000).default(8000),
+  PRODUCT_CONTEXT_MAX_FILES: z.coerce.number().int().min(1).max(20).default(10),
+  PRODUCT_CONTEXT_MAX_NOTION_CHARS: z.coerce.number().int().min(1000).max(50000).default(16000),
+  PRODUCT_CONTEXT_MAX_TOTAL_CHARS: z.coerce.number().int().min(2000).max(80000).default(32000),
+  PRODUCT_CONTEXT_PAGE_ID: optionalNonEmptyString,
   RUN_LOG_PATH: z.string().min(1).default("data/run-log.jsonl"),
   TARGET_PRODUCT_REPO: z.string().min(1).default("Chief of Staff app product repo (set TARGET_PRODUCT_REPO)"),
 });
