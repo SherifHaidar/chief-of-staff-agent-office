@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { CodexHandoffApprovalPayload } from "../../src/approval/codex-handoff-approval.js";
-import type { GitHubAppClient } from "../../src/github/github-app-client.js";
+import { GitHubApiError, type GitHubAppClient } from "../../src/github/github-app-client.js";
 import { GitHubDraftPrConflictError, GitHubDraftPrService } from "../../src/github/github-draft-pr.service.js";
 
 const payload: CodexHandoffApprovalPayload = {
@@ -40,7 +40,7 @@ describe("GitHubDraftPrService", () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce({ object: { sha: "base-sha" } })
-      .mockRejectedValueOnce(Object.assign(new Error("Not Found"), { statusCode: 404, name: "GitHubApiError" }))
+      .mockRejectedValueOnce(new GitHubApiError("Not Found", 404))
       .mockResolvedValueOnce([]);
     const service = new GitHubDraftPrService(createClient(request), {
       allowedBranchPrefixes: ["agent-office/", "codex/"],
