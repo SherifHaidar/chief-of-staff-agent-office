@@ -83,9 +83,11 @@ The dashboard should stay human-readable and operational. It should not become t
 1. Read tasks where `Status = Ready for Architecture`.
 2. Fetch the selected task page and relevant task content.
 3. Generate an Architect Brief preview.
-4. On approval, append the exact approved Architect Brief to the same task page.
-5. Update `Status` to `Ready for Codex` only after the append succeeds.
-6. Return and record a structured run summary.
+4. Optionally revise the preview using Sherif feedback, the previous signed preview, task content, and Product Context Pack.
+5. On approval, append the exact latest approved Architect Brief to the same task page.
+6. Include approval timestamp, revision number, Architecture disposition, owner decision notes, and context gaps in the writeback.
+7. Update `Status` to `Ready for Codex` only after the append succeeds.
+8. Return and record a structured run summary.
 
 ### Implementation Desk
 
