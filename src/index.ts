@@ -22,6 +22,7 @@ export * from "./config/env.js";
 export * from "./context/product-context-pack.builder.js";
 export * from "./domain/ai-build-task.js";
 export * from "./domain/architect-brief.js";
+export * from "./domain/architect-brief-writeback.js";
 export * from "./domain/codex-handoff-brief.js";
 export * from "./domain/github-draft-pr.js";
 export * from "./domain/product-context-pack.js";
