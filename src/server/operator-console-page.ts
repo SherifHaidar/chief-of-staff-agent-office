@@ -54,6 +54,7 @@ export function renderOperatorConsolePage(): string {
     .brief p, .brief li { color: var(--text); line-height: 1.5; }
     .brief ul { margin: 6px 0 0; padding-left: 20px; }
     .empty { min-height: 260px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; }
+    .proposal-pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); background: #fbfcfd; border-radius: 6px; padding: 12px; max-height: 260px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .result { white-space: pre-wrap; overflow-wrap: anywhere; background: #0f172a; color: #e5edf7; border-radius: 8px; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 320px; overflow: auto; }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 760px); margin-top: 20px; }
@@ -103,6 +104,8 @@ export function renderOperatorConsolePage(): string {
           <div class="row">
             <button id="previewButton" disabled>Preview</button>
             <button class="primary" id="approveButton" disabled>Approve writeback</button>
+            <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
+            <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
           </div>
         </div>
         <div class="status" id="previewStatus"></div>
@@ -146,6 +149,9 @@ export function renderOperatorConsolePage(): string {
       apiKey: sessionStorage.getItem("agentOfficeApiKey") || "",
       approval: null,
       artifact: null,
+      codexHandoffApprovalToken: null,
+      githubApproval: null,
+      githubProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
       selectedTask: null,
       tasks: []
@@ -159,6 +165,8 @@ export function renderOperatorConsolePage(): string {
     const clearButton = document.getElementById("clearButton");
     const deskMode = document.getElementById("deskMode");
     const expiresAt = document.getElementById("expiresAt");
+    const githubApproveButton = document.getElementById("githubApproveButton");
+    const githubPreviewButton = document.getElementById("githubPreviewButton");
     const globalStatus = document.getElementById("globalStatus");
     const loadTasksButton = document.getElementById("loadTasksButton");
     const previewButton = document.getElementById("previewButton");
@@ -210,6 +218,9 @@ export function renderOperatorConsolePage(): string {
       const desk = activeDesk();
       state.approval = null;
       state.artifact = null;
+      state.codexHandoffApprovalToken = null;
+      state.githubApproval = null;
+      state.githubProposal = null;
       state.selectedTask = null;
       state.tasks = [];
       selectedTaskTitle.textContent = desk.previewTitle;
@@ -218,6 +229,10 @@ export function renderOperatorConsolePage(): string {
       approveButton.disabled = true;
       approvalPanel.hidden = true;
       result.hidden = true;
+      githubPreviewButton.hidden = state.mode !== "implementation";
+      githubApproveButton.hidden = state.mode !== "implementation";
+      githubPreviewButton.disabled = true;
+      githubApproveButton.disabled = true;
       taskList.innerHTML = "";
       briefPreview.innerHTML = '<div class="empty">Select a ' + escapeHtml(desk.readyLabel) + ' task.</div>';
       setStatus(previewStatus, "");
@@ -245,10 +260,15 @@ export function renderOperatorConsolePage(): string {
       state.selectedTask = task;
       state.approval = null;
       state.artifact = null;
+      state.codexHandoffApprovalToken = null;
+      state.githubApproval = null;
+      state.githubProposal = null;
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
       previewButton.disabled = false;
       approveButton.disabled = true;
+      githubPreviewButton.disabled = true;
+      githubApproveButton.disabled = true;
       approvalPanel.hidden = true;
       result.hidden = true;
       briefPreview.innerHTML = '<div class="empty">Preview not generated.</div>';
@@ -299,6 +319,20 @@ export function renderOperatorConsolePage(): string {
         '<h3>Product Intent</h3><p>' + escapeHtml(handoff.productIntent) + '</p>',
         sections.map(function (section) { return renderList(section[0], section[1]); }).join(""),
         '<h3>Suggested PR Body</h3><p>' + escapeHtml(handoff.suggestedPrBody) + '</p>'
+      ].join("");
+    }
+
+    function renderGitHubProposal(proposal) {
+      briefPreview.innerHTML = [
+        '<div class="brief-title">' + escapeHtml(proposal.prTitle) + '</div>',
+        '<p><strong>Repository:</strong> ' + escapeHtml(proposal.repository) + '</p>',
+        '<p><strong>Base:</strong> ' + escapeHtml(proposal.baseBranch) + ' @ ' + escapeHtml(proposal.baseCommitSha) + '</p>',
+        '<p><strong>Branch:</strong> ' + escapeHtml(proposal.branchName) + '</p>',
+        '<p><strong>File:</strong> ' + escapeHtml(proposal.handoffFilePath) + '</p>',
+        '<p><strong>Commit:</strong> ' + escapeHtml(proposal.commitMessage) + '</p>',
+        '<h3>Draft PR Body</h3><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre>',
+        '<h3>Handoff File Content</h3><pre class="proposal-pre">' + escapeHtml(proposal.handoffFileContent) + '</pre>',
+        '<h3>Approval Boundary</h3><p>Draft only. This will not merge, deploy, push to main, or change repo settings/secrets.</p>'
       ].join("");
     }
 
@@ -369,6 +403,8 @@ export function renderOperatorConsolePage(): string {
       try {
         previewButton.disabled = true;
         approveButton.disabled = true;
+        githubPreviewButton.disabled = true;
+        githubApproveButton.disabled = true;
         setStatus(previewStatus, "Generating preview...");
         const body = state.mode === "architecture"
           ? { taskId: state.selectedTask.taskId, dryRun: true }
@@ -380,6 +416,9 @@ export function renderOperatorConsolePage(): string {
         });
         state.approval = payload.approval;
         state.artifact = payload[desk.artifactKey];
+        state.codexHandoffApprovalToken = state.mode === "implementation" ? payload.approval.token : null;
+        state.githubApproval = null;
+        state.githubProposal = null;
         renderArtifact(state.artifact);
         briefHash.textContent = "Hash " + payload.approval[desk.hashKey].slice(0, 12);
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
@@ -410,8 +449,61 @@ export function renderOperatorConsolePage(): string {
         });
         setStatus(previewStatus, "Writeback complete.", "ok");
         showResult(payload);
+        if (state.mode === "implementation") {
+          githubPreviewButton.disabled = false;
+        }
       } catch (error) {
         approveButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    githubPreviewButton.addEventListener("click", async function () {
+      if (!state.codexHandoffApprovalToken) {
+        return;
+      }
+
+      try {
+        githubPreviewButton.disabled = true;
+        githubApproveButton.disabled = true;
+        setStatus(previewStatus, "Generating GitHub Draft PR proposal...");
+        const payload = await agentFetch("/agent-office/github/draft-pr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codexHandoffApprovalToken: state.codexHandoffApprovalToken })
+        });
+        state.githubApproval = payload.approval;
+        state.githubProposal = payload.proposal;
+        renderGitHubProposal(payload.proposal);
+        briefHash.textContent = "Proposal " + payload.approval.proposalHash.slice(0, 12);
+        expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
+        approvalPanel.hidden = false;
+        githubApproveButton.disabled = false;
+        setStatus(previewStatus, "GitHub Draft PR proposal ready.", "ok");
+        showResult(payload.run);
+      } catch (error) {
+        githubPreviewButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    githubApproveButton.addEventListener("click", async function () {
+      if (!state.githubApproval) {
+        return;
+      }
+
+      try {
+        githubApproveButton.disabled = true;
+        setStatus(previewStatus, "Creating approved draft PR...");
+        const payload = await agentFetch("/agent-office/github/draft-pr/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approvalToken: state.githubApproval.token })
+        });
+        setStatus(previewStatus, "Draft PR created and linked back to Notion.", "ok");
+        showResult(payload);
+      } catch (error) {
+        githubApproveButton.disabled = false;
         setStatus(previewStatus, error.message, "error");
       }
     });
