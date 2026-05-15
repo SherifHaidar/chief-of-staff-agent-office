@@ -31,8 +31,9 @@ export function renderOperatorConsolePage(): string {
     .grid { display: grid; grid-template-columns: minmax(280px, 390px) minmax(0, 1fr); gap: 18px; align-items: start; }
     section, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
     label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
-    input, select { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
-    input:focus, select:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
+    input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
+    textarea { min-height: 94px; resize: vertical; line-height: 1.45; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
     button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; min-height: 38px; padding: 8px 12px; font: inherit; font-weight: 650; cursor: pointer; }
     button:hover { border-color: var(--accent); color: var(--accent-strong); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -112,6 +113,15 @@ export function renderOperatorConsolePage(): string {
           </div>
         </div>
         <div class="status" id="previewStatus"></div>
+        <div class="panel stack" id="revisionPanel" hidden>
+          <div>
+            <label for="revisionFeedback">Revision feedback</label>
+            <textarea id="revisionFeedback" placeholder="Tell the Architect Desk what to tighten, remove, clarify, or refocus before approval."></textarea>
+          </div>
+          <div class="row">
+            <button id="reviseButton" disabled>Revise preview</button>
+          </div>
+        </div>
         <div class="brief" id="briefPreview"><div class="empty">Select a ready task.</div></div>
         <div class="panel stack" id="approvalPanel" hidden>
           <div class="meta">
@@ -133,6 +143,7 @@ export function renderOperatorConsolePage(): string {
         previewEndpoint: "/agent-office/architect-review",
         previewTitle: "Architect Brief Preview",
         readyLabel: "Ready for Architecture",
+        reviseEndpoint: "/agent-office/architect-review/revise",
         taskEndpoint: "/agent-office/tasks/ready-for-architecture",
         workflowName: "Architecture Desk"
       },
@@ -157,6 +168,7 @@ export function renderOperatorConsolePage(): string {
       githubProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
       productContext: null,
+      revisionNumber: 0,
       selectedTask: null,
       tasks: []
     };
@@ -176,6 +188,9 @@ export function renderOperatorConsolePage(): string {
     const previewButton = document.getElementById("previewButton");
     const previewStatus = document.getElementById("previewStatus");
     const result = document.getElementById("result");
+    const reviseButton = document.getElementById("reviseButton");
+    const revisionFeedback = document.getElementById("revisionFeedback");
+    const revisionPanel = document.getElementById("revisionPanel");
     const saveKeyButton = document.getElementById("saveKeyButton");
     const selectedTaskMeta = document.getElementById("selectedTaskMeta");
     const selectedTaskTitle = document.getElementById("selectedTaskTitle");
@@ -226,6 +241,7 @@ export function renderOperatorConsolePage(): string {
       state.githubApproval = null;
       state.githubProposal = null;
       state.productContext = null;
+      state.revisionNumber = 0;
       state.selectedTask = null;
       state.tasks = [];
       selectedTaskTitle.textContent = desk.previewTitle;
@@ -238,6 +254,9 @@ export function renderOperatorConsolePage(): string {
       githubApproveButton.hidden = state.mode !== "implementation";
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
+      revisionFeedback.value = "";
+      revisionPanel.hidden = true;
+      reviseButton.disabled = true;
       taskList.innerHTML = "";
       briefPreview.innerHTML = '<div class="empty">Select a ' + escapeHtml(desk.readyLabel) + ' task.</div>';
       setStatus(previewStatus, "");
@@ -269,6 +288,7 @@ export function renderOperatorConsolePage(): string {
       state.githubApproval = null;
       state.githubProposal = null;
       state.productContext = null;
+      state.revisionNumber = 0;
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
       previewButton.disabled = false;
@@ -276,6 +296,9 @@ export function renderOperatorConsolePage(): string {
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
       approvalPanel.hidden = true;
+      revisionFeedback.value = "";
+      revisionPanel.hidden = true;
+      reviseButton.disabled = true;
       result.hidden = true;
       briefPreview.innerHTML = '<div class="empty">Preview not generated.</div>';
       setStatus(previewStatus, "");
@@ -449,10 +472,13 @@ export function renderOperatorConsolePage(): string {
         state.githubApproval = null;
         state.githubProposal = null;
         state.productContext = payload.productContext || null;
+        state.revisionNumber = payload.approval.revisionNumber || 1;
         renderArtifact(state.artifact);
-        briefHash.textContent = "Hash " + payload.approval[desk.hashKey].slice(0, 12);
+        briefHash.textContent = "v" + state.revisionNumber + " Hash " + payload.approval[desk.hashKey].slice(0, 12);
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
         approvalPanel.hidden = false;
+        revisionPanel.hidden = state.mode !== "architecture";
+        reviseButton.disabled = state.mode !== "architecture";
         approveButton.disabled = false;
         setStatus(previewStatus, "Preview ready.", "ok");
         showResult(payload.run);
@@ -460,6 +486,50 @@ export function renderOperatorConsolePage(): string {
         setStatus(previewStatus, error.message, "error");
       } finally {
         previewButton.disabled = false;
+      }
+    });
+
+    reviseButton.addEventListener("click", async function () {
+      if (!state.selectedTask || !state.approval || state.mode !== "architecture") {
+        return;
+      }
+
+      const feedback = revisionFeedback.value.trim();
+      if (!feedback) {
+        setStatus(previewStatus, "Revision feedback is required.", "error");
+        return;
+      }
+
+      try {
+        reviseButton.disabled = true;
+        approveButton.disabled = true;
+        setStatus(previewStatus, "Revising preview...");
+        const payload = await agentFetch("/agent-office/architect-review/revise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            previousApprovalToken: state.approval.token,
+            revisionFeedback: feedback,
+            taskId: state.selectedTask.taskId
+          })
+        });
+        state.approval = payload.approval;
+        state.artifact = payload.brief;
+        state.productContext = payload.productContext || null;
+        state.revisionNumber = payload.approval.revisionNumber || (state.revisionNumber + 1);
+        renderArtifact(state.artifact);
+        briefHash.textContent = "v" + state.revisionNumber + " Hash " + payload.approval.briefHash.slice(0, 12);
+        expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
+        approvalPanel.hidden = false;
+        revisionFeedback.value = "";
+        approveButton.disabled = false;
+        setStatus(previewStatus, "Revised preview ready. The active approval token now points to v" + state.revisionNumber + ".", "ok");
+        showResult(payload.run);
+      } catch (error) {
+        approveButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      } finally {
+        reviseButton.disabled = false;
       }
     });
 
