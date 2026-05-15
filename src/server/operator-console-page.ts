@@ -20,7 +20,6 @@ export function renderOperatorConsolePage(): string {
       --ok: #117044;
       --shadow: 0 16px 40px rgba(23, 32, 42, 0.08);
     }
-
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); }
     main { width: min(1180px, calc(100vw - 32px)); margin: 32px auto 56px; display: grid; gap: 18px; }
@@ -118,7 +117,7 @@ export function renderOperatorConsolePage(): string {
       tasks: [],
       selectedTask: null,
       approval: null,
-      brief: null,
+      brief: null
     };
 
     const apiKeyInput = document.getElementById("apiKey");
@@ -141,9 +140,9 @@ export function renderOperatorConsolePage(): string {
 
     apiKeyInput.value = state.apiKey;
 
-    function setStatus(element, message, type = "") {
+    function setStatus(element, message, type) {
       element.textContent = message;
-      element.className = `status ${type}`.trim();
+      element.className = ("status " + (type || "")).trim();
     }
 
     function requireKey() {
@@ -156,13 +155,14 @@ export function renderOperatorConsolePage(): string {
       return key;
     }
 
-    async function agentFetch(path, options = {}) {
-      const headers = new Headers(options.headers || {});
+    async function agentFetch(path, options) {
+      const requestOptions = options || {};
+      const headers = new Headers(requestOptions.headers || {});
       headers.set("x-agent-office-api-key", requireKey());
-      const response = await fetch(path, { ...options, headers });
-      const payload = await response.json().catch(() => ({}));
+      const response = await fetch(path, Object.assign({}, requestOptions, { headers: headers }));
+      const payload = await response.json().catch(function () { return {}; });
       if (!response.ok || payload.ok === false) {
-        throw new Error(payload.error || `Request failed with ${response.status}`);
+        throw new Error(payload.error || "Request failed with " + response.status);
       }
       return payload;
     }
@@ -174,19 +174,14 @@ export function renderOperatorConsolePage(): string {
         return;
       }
 
-      for (const task of state.tasks) {
+      state.tasks.forEach(function (task) {
         const button = document.createElement("button");
+        const priority = task.priority === undefined ? "" : '<span class="pill">Priority ' + escapeHtml(String(task.priority)) + '</span>';
         button.className = "task";
-        button.innerHTML = `
-          <strong>${escapeHtml(task.name)}</strong>
-          <span class="meta">
-            <span class="pill">${escapeHtml(task.status)}</span>
-            ${task.priority === undefined ? "" : `<span class="pill">Priority ${escapeHtml(String(task.priority))}</span>`}
-          </span>
-        `;
-        button.addEventListener("click", () => selectTask(task));
+        button.innerHTML = '<strong>' + escapeHtml(task.name) + '</strong><span class="meta"><span class="pill">' + escapeHtml(task.status) + '</span>' + priority + '</span>';
+        button.addEventListener("click", function () { selectTask(task); });
         taskList.appendChild(button);
-      }
+      });
     }
 
     function selectTask(task) {
@@ -194,7 +189,7 @@ export function renderOperatorConsolePage(): string {
       state.approval = null;
       state.brief = null;
       selectedTaskTitle.textContent = task.name;
-      selectedTaskMeta.textContent = `${task.status} · ${task.taskId}`;
+      selectedTaskMeta.textContent = task.status + " · " + task.taskId;
       previewButton.disabled = false;
       approveButton.disabled = true;
       approvalPanel.hidden = true;
@@ -211,21 +206,21 @@ export function renderOperatorConsolePage(): string {
         ["Configuration", brief.configuration],
         ["Implementation Plan", brief.implementationPlan],
         ["Risks", brief.risks],
-        ["Open Questions", brief.openQuestions],
+        ["Open Questions", brief.openQuestions]
       ];
 
-      briefPreview.innerHTML = `
-        <div class="brief-title">${escapeHtml(brief.briefTitle)}</div>
-        <p>${escapeHtml(brief.executiveSummary)}</p>
-        ${sections.map(([title, items]) => renderList(title, items)).join("")}
-      `;
+      briefPreview.innerHTML = '<div class="brief-title">' + escapeHtml(brief.briefTitle) + '</div><p>' + escapeHtml(brief.executiveSummary) + '</p>' + sections.map(function (section) {
+        return renderList(section[0], section[1]);
+      }).join("");
     }
 
     function renderList(title, items) {
       if (!items || items.length === 0) {
         return "";
       }
-      return `<div><h3>${escapeHtml(title)}</h3><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
+      return '<div><h3>' + escapeHtml(title) + '</h3><ul>' + items.map(function (item) {
+        return '<li>' + escapeHtml(item) + '</li>';
+      }).join("") + '</ul></div>';
     }
 
     function showResult(payload) {
@@ -242,7 +237,7 @@ export function renderOperatorConsolePage(): string {
         .replaceAll("'", "&#039;");
     }
 
-    saveKeyButton.addEventListener("click", () => {
+    saveKeyButton.addEventListener("click", function () {
       try {
         requireKey();
         setStatus(globalStatus, "API key ready.", "ok");
@@ -251,26 +246,26 @@ export function renderOperatorConsolePage(): string {
       }
     });
 
-    clearButton.addEventListener("click", () => {
+    clearButton.addEventListener("click", function () {
       sessionStorage.removeItem("agentOfficeApiKey");
       apiKeyInput.value = "";
       state.apiKey = "";
       setStatus(globalStatus, "Cleared.");
     });
 
-    loadTasksButton.addEventListener("click", async () => {
+    loadTasksButton.addEventListener("click", async function () {
       try {
         setStatus(taskStatus, "Loading tasks...");
         const payload = await agentFetch("/agent-office/tasks/ready-for-architecture");
         state.tasks = payload.tasks || [];
         renderTasks();
-        setStatus(taskStatus, `${state.tasks.length} ready task${state.tasks.length === 1 ? "" : "s"}.`, "ok");
+        setStatus(taskStatus, String(state.tasks.length) + " ready task" + (state.tasks.length === 1 ? "" : "s") + ".", "ok");
       } catch (error) {
         setStatus(taskStatus, error.message, "error");
       }
     });
 
-    previewButton.addEventListener("click", async () => {
+    previewButton.addEventListener("click", async function () {
       if (!state.selectedTask) {
         return;
       }
@@ -282,13 +277,13 @@ export function renderOperatorConsolePage(): string {
         const payload = await agentFetch("/agent-office/architect-review", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskId: state.selectedTask.taskId, dryRun: true }),
+          body: JSON.stringify({ taskId: state.selectedTask.taskId, dryRun: true })
         });
         state.approval = payload.approval;
         state.brief = payload.brief;
         renderBrief(payload.brief);
-        briefHash.textContent = `Hash ${payload.approval.briefHash.slice(0, 12)}`;
-        expiresAt.textContent = `Expires ${new Date(payload.approval.expiresAt).toLocaleString()}`;
+        briefHash.textContent = "Hash " + payload.approval.briefHash.slice(0, 12);
+        expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
         approvalPanel.hidden = false;
         approveButton.disabled = false;
         setStatus(previewStatus, "Preview ready.", "ok");
@@ -300,7 +295,7 @@ export function renderOperatorConsolePage(): string {
       }
     });
 
-    approveButton.addEventListener("click", async () => {
+    approveButton.addEventListener("click", async function () {
       if (!state.approval) {
         return;
       }
@@ -311,7 +306,7 @@ export function renderOperatorConsolePage(): string {
         const payload = await agentFetch("/agent-office/architect-review/approve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ approvalToken: state.approval.token }),
+          body: JSON.stringify({ approvalToken: state.approval.token })
         });
         setStatus(previewStatus, "Writeback complete.", "ok");
         showResult(payload);
