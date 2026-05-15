@@ -1,5 +1,9 @@
 export type AgentOfficeRunOutcome = "failed" | "skipped" | "succeeded";
-export type AgentOfficeWorkflow = "architect-review" | "codex-handoff" | "github-draft-pr-prep";
+export type AgentOfficeWorkflow =
+  | "architect-review"
+  | "architect-review-revision"
+  | "codex-handoff"
+  | "github-draft-pr-prep";
 
 export type AgentOfficeRunSummary = {
   briefGenerated: boolean;
@@ -9,6 +13,9 @@ export type AgentOfficeRunSummary = {
   notionWriteback: boolean;
   outcome: AgentOfficeRunOutcome;
   reason?: string;
+  revisionFeedbackHash?: string;
+  revisionNumber?: number;
+  revisionOfPreviewRunId?: string;
   runId: string;
   startedAt: string;
   statusUpdated: boolean;
