@@ -34,11 +34,13 @@ describe("Vercel adapter", () => {
     expect(config.rewrites).toEqual(
       expect.arrayContaining([
         { source: "/health", destination: "/api/health" },
+        { source: "/office", destination: "/api/office" },
         {
           source: "/agent-office/tasks/ready-for-architecture",
           destination: "/api/agent-office/tasks/ready-for-architecture",
         },
         { source: "/agent-office/architect-review", destination: "/api/agent-office/architect-review" },
+        { source: "/agent-office/architect-review/approve", destination: "/api/agent-office/architect-review/approve" },
         { source: "/agent-office/run-ready-architecture", destination: "/api/agent-office/run-ready-architecture" },
       ]),
     );
