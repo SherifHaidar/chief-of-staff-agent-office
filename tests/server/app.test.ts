@@ -34,6 +34,12 @@ const brief: ArchitectBrief = {
   risks: [],
 };
 
+const revisedBrief: ArchitectBrief = {
+  ...brief,
+  briefTitle: "Orchestrator API v0 revised",
+  executiveSummary: "Expose the workflow through the API with a tighter approval path.",
+};
+
 function workflowSuccess(dryRun: boolean): WorkflowResult {
   return {
     brief,
@@ -48,6 +54,13 @@ function workflowSuccess(dryRun: boolean): WorkflowResult {
 
 function createWorkflow(result: WorkflowResult) {
   return {
+    revise: vi.fn<NonNullable<ArchitectReviewWorkflow["revise"]>>().mockResolvedValue({
+      ...workflowSuccess(true),
+      brief: revisedBrief,
+      revisionFeedbackHash: "revision-feedback-hash",
+      revisionNumber: 2,
+      revisionOfPreviewRunId: "run_v1",
+    }),
     run: vi.fn<ArchitectReviewWorkflow["run"]>().mockResolvedValue(result),
   };
 }
@@ -254,6 +267,10 @@ describe("Agent Office API", () => {
     expect(scanner.hasArchitectBrief).toHaveBeenCalledWith(pageId);
     expect(approvedWriter.writeApprovedBrief).toHaveBeenCalledWith({
       brief,
+      metadata: expect.objectContaining({
+        decisionStatus: "Ready for Codex",
+        revisionNumber: 1,
+      }),
       pageId,
       statusAfterWriteback: "Ready for Codex",
       taskName: "Test task",
@@ -279,6 +296,131 @@ describe("Agent Office API", () => {
       taskId: pageId,
     });
     expect(runLog.records).toEqual([previewBody.run, approveBody.run]);
+
+    await app.close();
+  });
+
+  it("revises an Architect Brief preview into a new active approval token without writing to Notion", async () => {
+    const workflow = createWorkflow(workflowSuccess(true));
+    const approvedWriter = createApprovedWriter(workflowSuccess(false));
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ approvedWriter, runLog, workflow });
+
+    const previewResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { dryRun: true, taskId: pageId },
+      url: "/agent-office/architect-review",
+    });
+    const previewBody = previewResponse.json();
+
+    const revisionResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: {
+        previousApprovalToken: previewBody.approval.token,
+        revisionFeedback: "Tighten the scope and make the approval boundary explicit.",
+        taskId: pageId,
+      },
+      url: "/agent-office/architect-review/revise",
+    });
+    const revisionBody = revisionResponse.json();
+
+    expect(revisionResponse.statusCode).toBe(200);
+    expect(workflow.revise).toHaveBeenCalledWith({
+      pageId,
+      previousBrief: brief,
+      revisionFeedback: "Tighten the scope and make the approval boundary explicit.",
+      revisionFeedbackHash: expect.any(String),
+      revisionNumber: 2,
+      revisionOfPreviewRunId: previewBody.run.runId,
+    });
+    expect(approvedWriter.writeApprovedBrief).not.toHaveBeenCalled();
+    expect(revisionBody).toMatchObject({
+      approval: {
+        action: "architect-brief-writeback",
+        briefHash: expect.any(String),
+        decisionStatus: "Ready for Codex",
+        revisionNumber: 2,
+        token: expect.any(String),
+      },
+      brief: revisedBrief,
+      briefGenerated: true,
+      dryRun: true,
+      ok: true,
+      revision: {
+        revisionFeedbackHash: expect.any(String),
+        revisionNumber: 2,
+        revisionOfPreviewRunId: previewBody.run.runId,
+      },
+      run: {
+        dryRun: true,
+        notionWriteback: false,
+        outcome: "succeeded",
+        revisionFeedbackHash: expect.any(String),
+        revisionNumber: 2,
+        revisionOfPreviewRunId: previewBody.run.runId,
+        statusUpdated: false,
+        taskId: pageId,
+        workflow: "architect-review-revision",
+      },
+      statusUpdated: false,
+      taskId: pageId,
+    });
+    expect(runLog.records).toEqual([previewBody.run, revisionBody.run]);
+
+    await app.close();
+  });
+
+  it("approves the latest revised preview token, not the original preview", async () => {
+    const workflow = createWorkflow(workflowSuccess(true));
+    const approvedWriter = createApprovedWriter({
+      ...workflowSuccess(false),
+      brief: revisedBrief,
+    });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ approvedWriter, runLog, workflow });
+
+    const previewResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { dryRun: true, taskId: pageId },
+      url: "/agent-office/architect-review",
+    });
+    const previewBody = previewResponse.json();
+    const revisionResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: {
+        previousApprovalToken: previewBody.approval.token,
+        revisionFeedback: "Make this version final.",
+        taskId: pageId,
+      },
+      url: "/agent-office/architect-review/revise",
+    });
+    const revisionBody = revisionResponse.json();
+
+    const approveResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { approvalToken: revisionBody.approval.token },
+      url: "/agent-office/architect-review/approve",
+    });
+
+    expect(approveResponse.statusCode).toBe(200);
+    expect(workflow.run).toHaveBeenCalledOnce();
+    expect(workflow.revise).toHaveBeenCalledOnce();
+    expect(approvedWriter.writeApprovedBrief).toHaveBeenCalledWith({
+      brief: revisedBrief,
+      metadata: expect.objectContaining({
+        decisionStatus: "Ready for Codex",
+        revisionNumber: 2,
+        revisionOfPreviewRunId: previewBody.run.runId,
+      }),
+      pageId,
+      statusAfterWriteback: "Ready for Codex",
+      taskName: "Test task",
+    });
 
     await app.close();
   });
