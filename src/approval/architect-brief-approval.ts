@@ -49,7 +49,7 @@ function stableSerialize(value: unknown): string {
     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`).join(",")}}`;
   }
 
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 
 function sign(value: string, secret: string): string {
