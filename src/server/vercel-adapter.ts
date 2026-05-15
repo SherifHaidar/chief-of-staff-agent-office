@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
 
-import { loadEnv } from "../src/config/env.js";
-import { createConfiguredAgentOfficeApp } from "../src/server/create-configured-app.js";
+import { loadEnv } from "../config/env.js";
+import { createConfiguredAgentOfficeApp } from "./create-configured-app.js";
 
-const VERCEL_API_PREFIX = "/api";
 const VERCEL_RUN_LOG_PATH = "/tmp/agent-office-run-log.jsonl";
 
 type InjectHttpMethod = "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT";
@@ -33,17 +32,9 @@ async function getApp(): Promise<FastifyInstance> {
   return appPromise;
 }
 
-export function toFastifyInjectUrl(requestUrl: string): string {
+export function toFastifyInjectUrl(requestUrl: string, routePath: string): string {
   const url = new URL(requestUrl);
-  let pathname = url.pathname;
-
-  if (pathname === VERCEL_API_PREFIX) {
-    pathname = "/";
-  } else if (pathname.startsWith(`${VERCEL_API_PREFIX}/`)) {
-    pathname = pathname.slice(VERCEL_API_PREFIX.length);
-  }
-
-  return `${pathname}${url.search}`;
+  return `${routePath}${url.search}`;
 }
 
 function toRequestHeaders(headers: Headers): Record<string, string> {
@@ -84,19 +75,17 @@ function toResponseHeaders(headers: Record<string, string | string[] | number | 
   return responseHeaders;
 }
 
-export default {
-  async fetch(request: Request): Promise<Response> {
-    const app = await getApp();
-    const response = await app.inject({
-      headers: toRequestHeaders(request.headers),
-      method: toInjectMethod(request.method),
-      payload: await toRequestPayload(request),
-      url: toFastifyInjectUrl(request.url),
-    });
+export async function handleVercelRequest(request: Request, routePath: string): Promise<Response> {
+  const app = await getApp();
+  const response = await app.inject({
+    headers: toRequestHeaders(request.headers),
+    method: toInjectMethod(request.method),
+    payload: await toRequestPayload(request),
+    url: toFastifyInjectUrl(request.url, routePath),
+  });
 
-    return new Response(response.payload, {
-      headers: toResponseHeaders(response.headers),
-      status: response.statusCode,
-    });
-  },
-};
+  return new Response(response.payload, {
+    headers: toResponseHeaders(response.headers),
+    status: response.statusCode,
+  });
+}
