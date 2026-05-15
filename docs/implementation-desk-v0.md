@@ -44,6 +44,8 @@ The structured handoff includes:
 - suggested PR body
 - explicit merge and deployment approval warnings
 
+When `PRODUCT_CONTEXT_PAGE_ID` is configured, the handoff agent receives the shared Product Context Pack before generation. The handoff should use actual product context, inspected repo files, fragile areas, and do-not-break flows. If the pack reports gaps, the handoff should surface them instead of pretending the repo was fully inspected.
+
 ## Approval Contract
 
 Preview responses include signed approval tokens with a 120 minute expiry.

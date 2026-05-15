@@ -34,12 +34,27 @@ Approved Codex Handoff Brief
 
 The longer-term goal is an AI Development Office that can coordinate architecture, implementation planning, review, QA, release notes, GitHub/Vercel coordination, and human approval gates.
 
+## Product Context Pack v0
+
+Before generating Architect Briefs or Codex Handoff Briefs, the Agent Office can build a bounded Product Context Pack for the Chief of Staff app. This is a shared capability for current and future desks: Architect, Implementation Desk, future code-change proposals, Claude Review, QA/Release checks, and Build Room dashboard context display.
+
+The pack combines:
+
+- the Notion product context page configured by `PRODUCT_CONTEXT_PAGE_ID`
+- the AI Build Task page content
+- a bounded GitHub repo snapshot from `TARGET_PRODUCT_REPO`
+- default product repo files such as `README.md`, `package.json`, `.env.example`, and product files named in the Notion context/task
+- context gaps when files or sources are missing
+
+It does not load the whole repo. File count and character budgets are capped. Agents are instructed to use the inspected context and call out gaps instead of guessing.
+
 ## Docs
 
 - [Notion Operating Contract](docs/notion-operating-contract.md)
 - [Operator Console v0](docs/operator-console-v0.md)
 - [Implementation Desk v0](docs/implementation-desk-v0.md)
 - [GitHub Draft PR Prep v0](docs/github-draft-pr-prep-v0.md)
+- [Product Context Pack v0](docs/product-context-pack-v0.md)
 
 ## Quick Start
 
@@ -188,6 +203,12 @@ Required for GitHub Draft PR Prep:
 - `GITHUB_ALLOWED_BRANCH_PREFIXES=agent-office/,codex/`
 - `GITHUB_DEFAULT_BASE_BRANCH=main`
 
+Required for Product Context Pack:
+
+- `PRODUCT_CONTEXT_PAGE_ID=361b258f9a3e819f8cd9f9e33d768e0a`
+- existing Notion integration access to that page
+- existing GitHub App access to `TARGET_PRODUCT_REPO` for repo context
+
 Recommended explicit configuration:
 
 - `OPENAI_MODEL=gpt-5.4`
@@ -198,13 +219,17 @@ Recommended explicit configuration:
 - `NOTION_STATUS_AFTER_ARCHITECT=Ready for Codex`
 - `NOTION_STATUS_AFTER_CODEX_HANDOFF=In Codex`
 - `TARGET_PRODUCT_REPO=SherifHaidar/personal-chief-of-staff`
+- `PRODUCT_CONTEXT_MAX_FILES=10`
+- `PRODUCT_CONTEXT_MAX_FILE_CHARS=8000`
+- `PRODUCT_CONTEXT_MAX_NOTION_CHARS=16000`
+- `PRODUCT_CONTEXT_MAX_TOTAL_CHARS=32000`
 - `RUN_LOG_PATH=data/run-log.jsonl`
 
 Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. The approval secret signs short-lived approval tokens and should be different from the API key.
 
-The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, and `Pull requests: read/write`. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
+The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, and `Pull requests: read/write`. Product Context Pack uses the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
 
-The Notion integration must be able to read the AI Build Tasks database, read task page content, append blocks to task pages, and update the configured status property.
+The Notion integration must be able to read the AI Build Tasks database, read task page content, read the product context page, append blocks to task pages, and update the configured status property.
 
 ## Vercel
 
@@ -221,5 +246,7 @@ On Vercel, the adapter defaults `RUN_LOG_PATH` to `/tmp/agent-office-run-log.jso
 ## Safety Model
 
 Agents do not receive tools that mutate external systems. They only return structured outputs. The TypeScript workflow layer owns side effects and performs Notion/GitHub writes in a fixed order.
+
+Agents may receive a bounded Product Context Pack containing Notion product context and selected GitHub repo file excerpts. This is read-only context, not tool access. Missing context is surfaced as context gaps.
 
 Dry-run and preview steps do not write to Notion or GitHub. Approved Notion writeback appends to the same task page first and updates status only after append succeeds. Approved GitHub Draft PR Prep creates only an allowlisted branch, one handoff file commit, and a draft PR. It does not edit product code, push to main, merge, deploy, or change repository settings/secrets.

@@ -55,6 +55,9 @@ export function renderOperatorConsolePage(): string {
     .brief ul { margin: 6px 0 0; padding-left: 20px; }
     .empty { min-height: 260px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; }
     .proposal-pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); background: #fbfcfd; border-radius: 6px; padding: 12px; max-height: 260px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .context-summary { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: #fbfcfd; display: grid; gap: 6px; }
+    .context-summary strong { font-size: 13px; }
+    .context-summary .gaps { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .result { white-space: pre-wrap; overflow-wrap: anywhere; background: #0f172a; color: #e5edf7; border-radius: 8px; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 320px; overflow: auto; }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 760px); margin-top: 20px; }
@@ -153,6 +156,7 @@ export function renderOperatorConsolePage(): string {
       githubApproval: null,
       githubProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
+      productContext: null,
       selectedTask: null,
       tasks: []
     };
@@ -221,6 +225,7 @@ export function renderOperatorConsolePage(): string {
       state.codexHandoffApprovalToken = null;
       state.githubApproval = null;
       state.githubProposal = null;
+      state.productContext = null;
       state.selectedTask = null;
       state.tasks = [];
       selectedTaskTitle.textContent = desk.previewTitle;
@@ -263,6 +268,7 @@ export function renderOperatorConsolePage(): string {
       state.codexHandoffApprovalToken = null;
       state.githubApproval = null;
       state.githubProposal = null;
+      state.productContext = null;
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
       previewButton.disabled = false;
@@ -285,6 +291,7 @@ export function renderOperatorConsolePage(): string {
     }
 
     function renderArchitectBrief(brief) {
+      const contextSummary = renderContextSummary(state.productContext);
       const sections = [
         ["Recommended Architecture", brief.recommendedArchitecture],
         ["File Structure", brief.fileStructure],
@@ -295,12 +302,13 @@ export function renderOperatorConsolePage(): string {
         ["Open Questions", brief.openQuestions]
       ];
 
-      briefPreview.innerHTML = '<div class="brief-title">' + escapeHtml(brief.briefTitle) + '</div><p>' + escapeHtml(brief.executiveSummary) + '</p>' + sections.map(function (section) {
+      briefPreview.innerHTML = contextSummary + '<div class="brief-title">' + escapeHtml(brief.briefTitle) + '</div><p>' + escapeHtml(brief.executiveSummary) + '</p>' + sections.map(function (section) {
         return renderList(section[0], section[1]);
       }).join("");
     }
 
     function renderCodexHandoff(handoff) {
+      const contextSummary = renderContextSummary(state.productContext);
       const sections = [
         ["Implementation Scope", handoff.implementationScope],
         ["Likely Affected Files or Modules", handoff.likelyAffectedFiles],
@@ -312,6 +320,7 @@ export function renderOperatorConsolePage(): string {
       ];
 
       briefPreview.innerHTML = [
+        contextSummary,
         '<div class="brief-title">' + escapeHtml(handoff.suggestedPrTitle) + '</div>',
         '<p><strong>Target repo:</strong> ' + escapeHtml(handoff.targetProductRepo) + '</p>',
         '<p><strong>Suggested branch:</strong> ' + escapeHtml(handoff.suggestedBranchName) + '</p>',
@@ -320,6 +329,26 @@ export function renderOperatorConsolePage(): string {
         sections.map(function (section) { return renderList(section[0], section[1]); }).join(""),
         '<h3>Suggested PR Body</h3><p>' + escapeHtml(handoff.suggestedPrBody) + '</p>'
       ].join("");
+    }
+
+    function renderContextSummary(productContext) {
+      if (!productContext) {
+        return '<div class="context-summary"><strong>Product context</strong><div class="meta"><span class="pill">Not included</span></div><div class="gaps">No Product Context Pack summary was returned for this preview.</div></div>';
+      }
+
+      const gaps = productContext.contextGaps && productContext.contextGaps.length > 0
+        ? '<div class="gaps">' + productContext.contextGaps.map(escapeHtml).join('<br>') + '</div>'
+        : '<div class="gaps">No context gaps reported.</div>';
+      const pills = [
+        productContext.included ? 'Included' : 'Not included',
+        productContext.notionIncluded ? 'Notion product context' : 'No Notion context',
+        productContext.repoIncluded ? String(productContext.fileCount || 0) + ' repo files' : 'No repo files',
+        productContext.baseCommitSha ? 'Base ' + productContext.baseCommitSha.slice(0, 7) : ''
+      ].filter(Boolean).map(function (item) {
+        return '<span class="pill">' + escapeHtml(item) + '</span>';
+      }).join('');
+
+      return '<div class="context-summary"><strong>Product context</strong><div class="meta">' + pills + '</div>' + gaps + '</div>';
     }
 
     function renderGitHubProposal(proposal) {
@@ -419,6 +448,7 @@ export function renderOperatorConsolePage(): string {
         state.codexHandoffApprovalToken = state.mode === "implementation" ? payload.approval.token : null;
         state.githubApproval = null;
         state.githubProposal = null;
+        state.productContext = payload.productContext || null;
         renderArtifact(state.artifact);
         briefHash.textContent = "Hash " + payload.approval[desk.hashKey].slice(0, 12);
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();

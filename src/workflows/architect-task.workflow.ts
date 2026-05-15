@@ -1,6 +1,8 @@
 import type { ArchitectAgentRunner } from "../agents/architect.agent.js";
+import type { ProductContextProvider } from "../context/product-context-pack.builder.js";
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import { summarizeProductContextPack } from "../domain/product-context-pack.js";
 import { serializeError } from "../utils/errors.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
 import type { Logger } from "../utils/logger.js";
@@ -30,20 +32,26 @@ export type ArchitectTaskWorkflowDependencies = {
   architect: ArchitectAgentRunner;
   logger?: Logger;
   now?: () => Date;
+  productContextProvider?: ProductContextProvider;
   taskRepository: ArchitectTaskRepository;
+  targetProductRepo?: string;
 };
 
 export class ArchitectTaskWorkflow {
   private readonly architect: ArchitectAgentRunner;
   private readonly logger: Logger;
   private readonly now: () => Date;
+  private readonly productContextProvider?: ProductContextProvider;
   private readonly taskRepository: ArchitectTaskRepository;
+  private readonly targetProductRepo?: string;
 
   constructor(dependencies: ArchitectTaskWorkflowDependencies) {
     this.architect = dependencies.architect;
     this.logger = dependencies.logger ?? silentLogger;
     this.now = dependencies.now ?? (() => new Date());
+    this.productContextProvider = dependencies.productContextProvider;
     this.taskRepository = dependencies.taskRepository;
+    this.targetProductRepo = dependencies.targetProductRepo;
   }
 
   async run(input: ArchitectTaskWorkflowInput): Promise<WorkflowResult> {
@@ -53,9 +61,17 @@ export class ArchitectTaskWorkflow {
       pageId = normalizeNotionPageId(input.pageId);
       this.logger.info("Fetching Notion task", { pageId });
       const task = await this.taskRepository.fetchTask(pageId);
+      const productContext =
+        this.productContextProvider && this.targetProductRepo
+          ? await this.productContextProvider.build({
+              targetProductRepo: this.targetProductRepo,
+              task,
+            })
+          : undefined;
 
       this.logger.info("Running Architect Agent", { pageId, title: task.title });
-      const brief = await this.architect.createBrief(task);
+      const brief = await this.architect.createBrief(task, { productContext });
+      const productContextSummary = summarizeProductContextPack(productContext);
 
       if (input.dryRun) {
         this.logger.info("Dry run complete; skipping Notion writeback", { pageId });
@@ -64,6 +80,7 @@ export class ArchitectTaskWorkflow {
           dryRun: true,
           ok: true,
           pageId,
+          ...(productContextSummary ? { productContext: productContextSummary } : {}),
           statusUpdated: false,
           title: task.title,
           wroteToNotion: false,
@@ -84,6 +101,7 @@ export class ArchitectTaskWorkflow {
         dryRun: false,
         ok: true,
         pageId,
+        ...(productContextSummary ? { productContext: productContextSummary } : {}),
         statusUpdated: true,
         title: task.title,
         wroteToNotion: true,

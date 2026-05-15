@@ -1,4 +1,5 @@
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import type { ProductContextPackSummary } from "../domain/product-context-pack.js";
 import type { SerializedError } from "../utils/errors.js";
 
 export type WorkflowSuccess = {
@@ -6,6 +7,7 @@ export type WorkflowSuccess = {
   dryRun: boolean;
   ok: true;
   pageId: string;
+  productContext?: ProductContextPackSummary;
   statusUpdated: boolean;
   title: string;
   wroteToNotion: boolean;
