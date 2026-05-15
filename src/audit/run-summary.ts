@@ -1,5 +1,5 @@
 export type AgentOfficeRunOutcome = "failed" | "skipped" | "succeeded";
-export type AgentOfficeWorkflow = "architect-review" | "codex-handoff";
+export type AgentOfficeWorkflow = "architect-review" | "codex-handoff" | "github-draft-pr-prep";
 
 export type AgentOfficeRunSummary = {
   briefGenerated: boolean;
