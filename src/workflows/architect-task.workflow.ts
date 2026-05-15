@@ -2,6 +2,7 @@ import type { ArchitectAgentRunner } from "../agents/architect.agent.js";
 import type { ProductContextProvider } from "../context/product-context-pack.builder.js";
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import type { ArchitectBriefApprovalMetadata, ArchitectBriefWritebackMetadata } from "../domain/architect-brief-writeback.js";
 import { summarizeProductContextPack } from "../domain/product-context-pack.js";
 import { serializeError } from "../utils/errors.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
@@ -10,7 +11,12 @@ import { silentLogger } from "../utils/logger.js";
 import type { WorkflowResult } from "./workflow-result.js";
 
 export type ArchitectTaskRepository = {
-  appendArchitectBrief(pageId: string, brief: ArchitectBrief, generatedAt: Date): Promise<void>;
+  appendArchitectBrief(
+    pageId: string,
+    brief: ArchitectBrief,
+    generatedAt: Date,
+    metadata?: ArchitectBriefWritebackMetadata,
+  ): Promise<void>;
   fetchTask(pageId: string): Promise<AiBuildTask>;
   markArchitectBriefReady(pageId: string, statusName: string): Promise<void>;
 };
@@ -23,9 +29,19 @@ export type ArchitectTaskWorkflowInput = {
 
 export type ApprovedArchitectBriefWritebackInput = {
   brief: ArchitectBrief;
+  metadata?: ArchitectBriefApprovalMetadata;
   pageId: string;
   statusAfterWriteback: string;
   taskName?: string;
+};
+
+export type ArchitectBriefRevisionInput = {
+  pageId: string;
+  previousBrief: ArchitectBrief;
+  revisionFeedback: string;
+  revisionFeedbackHash: string;
+  revisionNumber: number;
+  revisionOfPreviewRunId: string;
 };
 
 export type ArchitectTaskWorkflowDependencies = {
@@ -118,13 +134,77 @@ export class ArchitectTaskWorkflow {
     }
   }
 
+  async revise(input: ArchitectBriefRevisionInput): Promise<WorkflowResult> {
+    let pageId: string | undefined;
+
+    try {
+      pageId = normalizeNotionPageId(input.pageId);
+      this.logger.info("Fetching Notion task for Architect Brief revision", { pageId });
+      const task = await this.taskRepository.fetchTask(pageId);
+      const productContext =
+        this.productContextProvider && this.targetProductRepo
+          ? await this.productContextProvider.build({
+              targetProductRepo: this.targetProductRepo,
+              task,
+            })
+          : undefined;
+
+      this.logger.info("Running Architect Agent revision", {
+        pageId,
+        revisionNumber: input.revisionNumber,
+        title: task.title,
+      });
+      const brief = await this.architect.reviseBrief(task, {
+        previousBrief: input.previousBrief,
+        productContext,
+        revisionFeedback: input.revisionFeedback,
+        revisionNumber: input.revisionNumber,
+      });
+      const productContextSummary = summarizeProductContextPack(productContext);
+
+      return {
+        brief,
+        dryRun: true,
+        ok: true,
+        pageId,
+        ...(productContextSummary ? { productContext: productContextSummary } : {}),
+        revisionFeedbackHash: input.revisionFeedbackHash,
+        revisionNumber: input.revisionNumber,
+        revisionOfPreviewRunId: input.revisionOfPreviewRunId,
+        statusUpdated: false,
+        title: task.title,
+        wroteToNotion: false,
+      };
+    } catch (error) {
+      const serialized = serializeError(error);
+      this.logger.error("Architect Brief revision failed", { error: serialized.message, pageId });
+
+      return {
+        error: serialized,
+        ok: false,
+        pageId,
+      };
+    }
+  }
+
   async writeApprovedBrief(input: ApprovedArchitectBriefWritebackInput): Promise<WorkflowResult> {
     let pageId: string | undefined;
 
     try {
       pageId = normalizeNotionPageId(input.pageId);
       this.logger.info("Appending approved Architect Brief to Notion", { pageId });
-      await this.taskRepository.appendArchitectBrief(pageId, input.brief, this.now());
+      const generatedAt = this.now();
+      await this.taskRepository.appendArchitectBrief(
+        pageId,
+        input.brief,
+        generatedAt,
+        input.metadata
+          ? {
+              ...input.metadata,
+              approvalTimestamp: generatedAt.toISOString(),
+            }
+          : undefined,
+      );
 
       this.logger.info("Updating Notion task status after approved writeback", {
         pageId,

@@ -8,6 +8,9 @@ export type WorkflowSuccess = {
   ok: true;
   pageId: string;
   productContext?: ProductContextPackSummary;
+  revisionFeedbackHash?: string;
+  revisionNumber?: number;
+  revisionOfPreviewRunId?: string;
   statusUpdated: boolean;
   title: string;
   wroteToNotion: boolean;

@@ -9,6 +9,7 @@ This repository owns orchestration only. It coordinates controlled office workfl
 ```text
 Ready for Architecture task
   -> Architect Agent preview
+  -> optional revision feedback loop
   -> signed approval
   -> exact Architect Brief writeback
   -> Status: Ready for Codex
@@ -52,6 +53,7 @@ It does not load the whole repo. File count and character budgets are capped. Ag
 
 - [Notion Operating Contract](docs/notion-operating-contract.md)
 - [Operator Console v0](docs/operator-console-v0.md)
+- [Architecture Desk Revision Loop v0](docs/architecture-desk-revision-loop-v0.md)
 - [Implementation Desk v0](docs/implementation-desk-v0.md)
 - [GitHub Draft PR Prep v0](docs/github-draft-pr-prep-v0.md)
 - [Product Context Pack v0](docs/product-context-pack-v0.md)
@@ -89,9 +91,10 @@ Open:
 The page is public as a shell, but every `/agent-office/*` request it makes requires `x-agent-office-api-key`. It supports:
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
+- Architecture Desk revisions: provide feedback, generate revised previews, and approve only the latest satisfactory preview.
 - Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep.
 
-Approval tokens expire after 120 minutes. Approval endpoints write or execute the exact previewed payload embedded in the signed token and do not rerun the model or regenerate GitHub proposal content.
+Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content.
 
 ## HTTP API
 
@@ -130,6 +133,15 @@ curl -X POST http://127.0.0.1:3000/agent-office/architect-review/approve \
   -H "Content-Type: application/json" \
   -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"approvalToken":"<approval-token-from-preview>"}'
+```
+
+Revise an Architect Brief preview:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/architect-review/revise \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"taskId":"<notion-page-id>","previousApprovalToken":"<approval-token-from-preview>","revisionFeedback":"Tighten scope and clarify remaining owner decisions."}'
 ```
 
 List Codex-ready tasks:

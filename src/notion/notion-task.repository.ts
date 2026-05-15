@@ -1,5 +1,6 @@
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import type { ArchitectBriefWritebackMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
@@ -200,9 +201,14 @@ export class NotionTaskRepository {
     return task.contentMarkdown.includes("Codex Handoff Brief:");
   }
 
-  async appendArchitectBrief(pageId: string, brief: ArchitectBrief, generatedAt: Date): Promise<void> {
+  async appendArchitectBrief(
+    pageId: string,
+    brief: ArchitectBrief,
+    generatedAt: Date,
+    metadata?: ArchitectBriefWritebackMetadata,
+  ): Promise<void> {
     const normalizedPageId = normalizeNotionPageId(pageId);
-    const blocks = renderArchitectBriefBlocks(brief, generatedAt);
+    const blocks = renderArchitectBriefBlocks(brief, generatedAt, metadata);
 
     for (const chunk of chunkBlocks(blocks)) {
       await this.client.blocks.children.append({
