@@ -124,14 +124,14 @@ export function verifyArchitectBriefApproval(input: {
     throw new ArchitectBriefApprovalTokenError("Invalid approval token.");
   }
 
-  let parsedJson: unknown;
+  let payload: ArchitectBriefApprovalPayload;
   try {
-    parsedJson = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    const parsedJson = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as unknown;
+    payload = ArchitectBriefApprovalPayloadSchema.parse(parsedJson);
   } catch {
     throw new ArchitectBriefApprovalTokenError("Invalid approval token.");
   }
 
-  const payload = ArchitectBriefApprovalPayloadSchema.parse(parsedJson);
   if (payload.briefHash !== hashArchitectBrief(payload.brief)) {
     throw new ArchitectBriefApprovalTokenError("Invalid approval token.");
   }
