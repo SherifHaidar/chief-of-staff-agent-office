@@ -1,4 +1,5 @@
 export type AgentOfficeRunOutcome = "failed" | "skipped" | "succeeded";
+export type AgentOfficeWorkflow = "architect-review" | "codex-handoff";
 
 export type AgentOfficeRunSummary = {
   briefGenerated: boolean;
@@ -13,7 +14,7 @@ export type AgentOfficeRunSummary = {
   statusUpdated: boolean;
   taskId: string;
   taskName?: string;
-  workflow: "architect-review";
+  workflow: AgentOfficeWorkflow;
 };
 
 export function createRunId(now = new Date()): string {
