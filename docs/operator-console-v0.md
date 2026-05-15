@@ -17,6 +17,8 @@ The console supports two desk modes:
 - Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, approve exact writeback, then move Status to `Ready for Codex`.
 - Implementation Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then optionally preview and approve GitHub Draft PR Prep.
 
+Preview cards show whether the shared Product Context Pack was included. This tells the operator whether the agent used Notion product context and bounded GitHub repo context before generating the brief or handoff.
+
 ## Architecture Flow
 
 ```text
