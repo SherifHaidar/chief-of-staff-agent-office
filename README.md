@@ -218,7 +218,7 @@ A successful real writeback appends the Architect Brief to the same Notion page 
 
 ## Vercel Deployment Preparation
 
-This repo includes a thin Vercel function adapter at `api/[...path].ts` and minimal rewrites in `vercel.json`. The deployed public routes stay the same as local development:
+This repo includes explicit Vercel function entrypoints under `api/` and minimal rewrites in `vercel.json`. The deployed public routes stay the same as local development:
 
 ```text
 /health
