@@ -31,6 +31,15 @@ describe("Vercel adapter", () => {
     ).toBe("/agent-office/codex-handoff");
   });
 
+  it("maps the explicit GitHub Draft PR Prep function to the existing API route", () => {
+    expect(
+      toFastifyInjectUrl(
+        "https://agent-office.example.com/api/agent-office/github/draft-pr",
+        "/agent-office/github/draft-pr",
+      ),
+    ).toBe("/agent-office/github/draft-pr");
+  });
+
   it("preserves query strings when mapping explicit Vercel functions", () => {
     expect(toFastifyInjectUrl("https://agent-office.example.com/api/health?check=smoke", "/health")).toBe(
       "/health?check=smoke",
@@ -56,6 +65,11 @@ describe("Vercel adapter", () => {
         { source: "/agent-office/architect-review/approve", destination: "/api/agent-office/architect-review/approve" },
         { source: "/agent-office/codex-handoff", destination: "/api/agent-office/codex-handoff" },
         { source: "/agent-office/codex-handoff/approve", destination: "/api/agent-office/codex-handoff/approve" },
+        { source: "/agent-office/github/draft-pr", destination: "/api/agent-office/github/draft-pr" },
+        {
+          source: "/agent-office/github/draft-pr/approve",
+          destination: "/api/agent-office/github/draft-pr/approve",
+        },
         { source: "/agent-office/run-ready-architecture", destination: "/api/agent-office/run-ready-architecture" },
       ]),
     );
