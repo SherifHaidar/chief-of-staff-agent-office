@@ -24,6 +24,31 @@ describe("renderArchitectBriefBlocks", () => {
     expect(blocks.some((block) => block.type === "bulleted_list_item")).toBe(true);
   });
 
+  it("renders approved revision metadata and owner decision notes", () => {
+    const blocks = renderArchitectBriefBlocks(
+      {
+        ...brief,
+        openQuestions: ["Should Sherif approve the product scope first?"],
+      },
+      new Date("2026-05-14T12:00:00.000Z"),
+      {
+        approvalTimestamp: "2026-05-14T12:05:00.000Z",
+        contextGaps: ["Product repo file cap reached."],
+        decisionStatus: "Needs Owner Decisions",
+        revisionFeedbackHash: "feedback-hash",
+        revisionNumber: 3,
+        revisionOfPreviewRunId: "run_v2",
+      },
+    );
+    const serialized = JSON.stringify(blocks);
+
+    expect(serialized).toContain("Latest approved Architect Brief.");
+    expect(serialized).toContain("Revision: v3.");
+    expect(serialized).toContain("Needs Owner Decisions");
+    expect(serialized).toContain("Owner Decision Notes");
+    expect(serialized).toContain("Product repo file cap reached.");
+  });
+
   it("chunks block arrays for Notion append limits", () => {
     const chunks = chunkBlocks(new Array(205).fill({ type: "paragraph", paragraph: { rich_text: [] } }), 100);
 
