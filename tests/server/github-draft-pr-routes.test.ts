@@ -115,7 +115,7 @@ function executionSuccess(): GitHubDraftPrWorkflowResult {
 function createCodexToken() {
   return createCodexHandoffApproval({
     handoff,
-    now: new Date("2026-05-15T12:00:00.000Z"),
+    now: new Date(),
     previewRunId: "run_codex_preview",
     secret: approvalSecret,
     statusAfterWriteback: "In Codex",
