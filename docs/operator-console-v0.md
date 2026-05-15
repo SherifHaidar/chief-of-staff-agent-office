@@ -14,7 +14,7 @@ The page is public as a shell. It does not embed secrets or task data. Every ope
 
 The console supports two desk modes:
 
-- Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, approve exact writeback, then move Status to `Ready for Codex`.
+- Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, optionally revise the preview through feedback rounds, approve exact writeback, then move Status to `Ready for Codex`.
 - Implementation Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then optionally preview and approve GitHub Draft PR Prep.
 
 Preview cards show whether the shared Product Context Pack was included. This tells the operator whether the agent used Notion product context and bounded GitHub repo context before generating the brief or handoff.
@@ -24,6 +24,9 @@ Preview cards show whether the shared Product Context Pack was included. This te
 ```text
 List Ready for Architecture tasks
   -> preview Architect Brief
+  -> optionally provide revision feedback
+  -> generate revised preview with a new signed token
+  -> repeat until satisfied
   -> review exact structured brief
   -> approve signed preview token
   -> append exact approved brief to Notion
@@ -57,6 +60,8 @@ Preview responses include a signed approval token with a 120 minute expiry. The 
 - exact structured preview payload
 - payload hash
 - preview run ID
+- revision number for revised Architecture previews
+- previous preview run ID and revision feedback hash when applicable
 - target status or GitHub write metadata
 - created and expiry timestamps
 
@@ -66,6 +71,8 @@ The approval endpoint requires both:
 - a valid, untampered, unexpired approval token
 
 Approval writes or executes the exact payload embedded in the token. It must not rerun the Architect Agent, rerun the Codex Handoff Agent, call OpenAI, or regenerate GitHub proposal content.
+
+For Architecture Desk revisions, each revision response replaces the active preview and approval token in the UI. Intermediate previews are not written to Notion. Only the final submitted token is written back.
 
 ## Duplicate Guard
 
