@@ -158,6 +158,7 @@ Sherif remains the final approver for important writes, merges, deployments, cor
 The Agent Office currently supports:
 
 - Scanning `Ready for Architecture` tasks.
+- Reading the Chief of Staff product context page into a bounded Product Context Pack.
 - Running the Architect workflow.
 - Appending approved Architect Briefs back to the same task page.
 - Moving successfully processed tasks to `Ready for Codex`.
