@@ -6,6 +6,15 @@ import { formatProductContextPackForAgent, type ProductContextPack } from "../do
 
 export interface ArchitectAgentRunner {
   createBrief(task: AiBuildTask, input?: { productContext?: ProductContextPack }): Promise<ArchitectBrief>;
+  reviseBrief(
+    task: AiBuildTask,
+    input: {
+      previousBrief: ArchitectBrief;
+      productContext?: ProductContextPack;
+      revisionFeedback: string;
+      revisionNumber: number;
+    },
+  ): Promise<ArchitectBrief>;
 }
 
 type OpenAIArchitectAgentRunnerOptions = {
@@ -57,6 +66,42 @@ export class OpenAIArchitectAgentRunner implements ArchitectAgentRunner {
 
     if (!result.finalOutput) {
       throw new Error("Architect Agent completed without a final output.");
+    }
+
+    return ArchitectBriefSchema.parse(result.finalOutput);
+  }
+
+  async reviseBrief(
+    task: AiBuildTask,
+    input: {
+      previousBrief: ArchitectBrief;
+      productContext?: ProductContextPack;
+      revisionFeedback: string;
+      revisionNumber: number;
+    },
+  ): Promise<ArchitectBrief> {
+    const result = await run(
+      this.agent,
+      [
+        `Revise the previous Architect Brief into revision v${input.revisionNumber}.`,
+        "Use Sherif's revision feedback, the current task context, and the Product Context Pack.",
+        "Preserve useful prior decisions, but replace anything that conflicts with the revision feedback or inspected context.",
+        "Do not write to Notion, update status, or call external systems.",
+        "Return only the revised structured ArchitectBrief output requested by the schema.",
+        "Product Context Pack:",
+        formatProductContextPackForAgent(input.productContext),
+        "Task context:",
+        formatTaskForArchitect(task),
+        "Previous Architect Brief:",
+        JSON.stringify(ArchitectBriefSchema.parse(input.previousBrief), null, 2),
+        "Sherif revision feedback:",
+        input.revisionFeedback,
+      ].join("\n\n"),
+      { maxTurns: 4 },
+    );
+
+    if (!result.finalOutput) {
+      throw new Error("Architect Agent revision completed without a final output.");
     }
 
     return ArchitectBriefSchema.parse(result.finalOutput);
