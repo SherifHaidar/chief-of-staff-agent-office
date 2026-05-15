@@ -3,10 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryRunLog } from "../../src/audit/run-log.js";
 import type { ArchitectBrief } from "../../src/domain/architect-brief.js";
 import type { ReadyArchitectureTask } from "../../src/domain/ready-architecture-task.js";
-import { createAgentOfficeApp, type ArchitectReviewWorkflow, type ReadyArchitectureTaskScanner } from "../../src/server/app.js";
+import {
+  createAgentOfficeApp,
+  type ApprovedArchitectBriefWriter,
+  type ArchitectReviewWorkflow,
+  type ReadyArchitectureTaskScanner,
+} from "../../src/server/app.js";
 import type { WorkflowResult } from "../../src/workflows/workflow-result.js";
 
 const apiKey = "test-agent-office-key";
+const approvalSecret = "test-approval-secret";
 const authHeaders = { "x-agent-office-api-key": apiKey };
 const pageId = "11111111-1111-1111-1111-111111111111";
 const readyTask: ReadyArchitectureTask = {
@@ -46,6 +52,12 @@ function createWorkflow(result: WorkflowResult) {
   };
 }
 
+function createApprovedWriter(result: WorkflowResult) {
+  return {
+    writeApprovedBrief: vi.fn<ApprovedArchitectBriefWriter["writeApprovedBrief"]>().mockResolvedValue(result),
+  };
+}
+
 function createScanner(input: { hasArchitectBrief?: boolean; tasks?: ReadyArchitectureTask[] } = {}) {
   return {
     findReadyForArchitectureTasks: vi
@@ -60,6 +72,8 @@ function createScanner(input: { hasArchitectBrief?: boolean; tasks?: ReadyArchit
 function createTestApp(
   input: {
     apiKey?: string;
+    approvalSecret?: string;
+    approvedWriter?: ReturnType<typeof createApprovedWriter>;
     runLog?: InMemoryRunLog;
     scanner?: ReturnType<typeof createScanner>;
     workflow?: ReturnType<typeof createWorkflow>;
@@ -67,6 +81,8 @@ function createTestApp(
 ) {
   return createAgentOfficeApp({
     apiKey: input.apiKey ?? apiKey,
+    approvalSecret: input.approvalSecret ?? approvalSecret,
+    approvedBriefWriter: input.approvedWriter ?? createApprovedWriter(workflowSuccess(false)),
     readyArchitectureScanner: input.scanner ?? createScanner(),
     runLog: input.runLog,
     statusAfterWriteback: "Ready for Codex",
@@ -86,6 +102,18 @@ describe("Agent Office API", () => {
       service: "chief-of-staff-agent-office",
       status: "healthy",
     });
+
+    await app.close();
+  });
+
+  it("serves the Operator Console without an API key", async () => {
+    const app = createTestApp();
+
+    const response = await app.inject({ method: "GET", url: "/office" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.body).toContain("Operator Console v0");
 
     await app.close();
   });
@@ -147,7 +175,7 @@ describe("Agent Office API", () => {
     await app.close();
   });
 
-  it("runs the Architect workflow in dry-run mode and records a run summary", async () => {
+  it("runs the Architect workflow in dry-run mode, returns an approval token, and records a run summary", async () => {
     const workflow = createWorkflow(workflowSuccess(true));
     const runLog = new InMemoryRunLog();
     const app = createTestApp({ runLog, workflow });
@@ -167,6 +195,14 @@ describe("Agent Office API", () => {
       statusAfterWriteback: "Ready for Codex",
     });
     expect(body).toMatchObject({
+      approval: {
+        action: "architect-brief-writeback",
+        briefHash: expect.any(String),
+        expiresAt: expect.any(String),
+        previewRunId: expect.any(String),
+        token: expect.any(String),
+      },
+      brief,
       briefGenerated: true,
       dryRun: true,
       ok: true,
@@ -184,7 +220,127 @@ describe("Agent Office API", () => {
       taskId: pageId,
     });
     expect(body.run.runId).toEqual(expect.any(String));
+    expect(body.approval.previewRunId).toBe(body.run.runId);
     expect(runLog.records).toEqual([body.run]);
+
+    await app.close();
+  });
+
+  it("approves the exact previewed brief without rerunning the model", async () => {
+    const workflow = createWorkflow(workflowSuccess(true));
+    const approvedWriter = createApprovedWriter(workflowSuccess(false));
+    const scanner = createScanner();
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ approvedWriter, runLog, scanner, workflow });
+
+    const previewResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { dryRun: true, taskId: pageId },
+      url: "/agent-office/architect-review",
+    });
+    const previewBody = previewResponse.json();
+
+    const approveResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { approvalToken: previewBody.approval.token },
+      url: "/agent-office/architect-review/approve",
+    });
+    const approveBody = approveResponse.json();
+
+    expect(approveResponse.statusCode).toBe(200);
+    expect(workflow.run).toHaveBeenCalledOnce();
+    expect(scanner.hasArchitectBrief).toHaveBeenCalledWith(pageId);
+    expect(approvedWriter.writeApprovedBrief).toHaveBeenCalledWith({
+      brief,
+      pageId,
+      statusAfterWriteback: "Ready for Codex",
+      taskName: "Test task",
+    });
+    expect(approveBody).toMatchObject({
+      approval: {
+        briefHash: previewBody.approval.briefHash,
+        expiresAt: previewBody.approval.expiresAt,
+        previewRunId: previewBody.run.runId,
+      },
+      briefGenerated: true,
+      dryRun: false,
+      ok: true,
+      run: {
+        dryRun: false,
+        notionWriteback: true,
+        outcome: "succeeded",
+        statusUpdated: true,
+        taskId: pageId,
+        taskName: "Test task",
+      },
+      statusUpdated: true,
+      taskId: pageId,
+    });
+    expect(runLog.records).toEqual([previewBody.run, approveBody.run]);
+
+    await app.close();
+  });
+
+  it("rejects invalid approval tokens without writing", async () => {
+    const approvedWriter = createApprovedWriter(workflowSuccess(false));
+    const app = createTestApp({ approvedWriter });
+
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { approvalToken: "not-a-real-token" },
+      url: "/agent-office/architect-review/approve",
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Invalid approval token.", ok: false });
+    expect(approvedWriter.writeApprovedBrief).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("skips approved writeback when an Architect Brief already exists", async () => {
+    const workflow = createWorkflow(workflowSuccess(true));
+    const approvedWriter = createApprovedWriter(workflowSuccess(false));
+    const scanner = createScanner({ hasArchitectBrief: true });
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ approvedWriter, runLog, scanner, workflow });
+
+    const previewResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { dryRun: true, taskId: pageId },
+      url: "/agent-office/architect-review",
+    });
+    const previewBody = previewResponse.json();
+
+    const approveResponse = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { approvalToken: previewBody.approval.token },
+      url: "/agent-office/architect-review/approve",
+    });
+    const approveBody = approveResponse.json();
+
+    expect(approveResponse.statusCode).toBe(409);
+    expect(approvedWriter.writeApprovedBrief).not.toHaveBeenCalled();
+    expect(approveBody).toMatchObject({
+      error: "Architect Brief already exists on task page.",
+      ok: false,
+      run: {
+        dryRun: false,
+        notionWriteback: false,
+        outcome: "skipped",
+        reason: "Architect Brief already exists on task page.",
+        statusUpdated: false,
+        taskId: pageId,
+        taskName: "Test task",
+      },
+      taskId: pageId,
+    });
+    expect(runLog.records).toEqual([previewBody.run, approveBody.run]);
 
     await app.close();
   });

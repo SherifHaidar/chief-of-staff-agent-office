@@ -7,7 +7,9 @@ This repository owns orchestration only. It does not connect to, clone, or modif
 ```text
 Notion AI Build Task
   -> Architect Agent
-  -> Architect Brief appended to the same Notion task
+  -> Architect Brief preview
+  -> Human approval
+  -> Exact approved Architect Brief appended to the same Notion task
   -> Notion task status update
 ```
 
@@ -29,15 +31,16 @@ Action:
 
 1. Fetch the Notion task page and its body content.
 2. Run a single Architect Agent with structured output.
-3. Render the Architect Brief into Notion blocks.
-4. Append the brief to the same page.
-5. Update the task status after successful writeback.
-6. Record a lightweight run summary for traceability.
+3. Preview the exact generated Architect Brief.
+4. Sign a short-lived approval token for that exact brief.
+5. Append the approved brief to the same page without rerunning the model.
+6. Update the task status after successful writeback.
+7. Record a lightweight run summary for traceability.
 
 Output:
 
 ```text
-A clear JSON success/failure result from the CLI or HTTP API.
+A clear JSON success/failure result from the CLI, HTTP API, or Operator Console.
 ```
 
 ## Quick Start
@@ -69,6 +72,24 @@ npm run dev
 ```
 
 The server listens on `127.0.0.1:3000` by default. You can override this with `HOST` and `PORT` environment variables.
+
+### Operator Console
+
+The Operator Console is available at:
+
+```text
+/office
+```
+
+It is a simple operational shell for the single-task Architect flow:
+
+1. Enter the `x-agent-office-api-key` value.
+2. Load tasks marked `Ready for Architecture`.
+3. Preview one Architect Brief.
+4. Review the exact generated brief and expiry time.
+5. Approve writeback for that exact brief.
+
+The page itself is public, but every `/agent-office/*` request it makes still requires the API key. Approval also requires a valid signed approval token.
 
 ### Health Check
 
@@ -130,6 +151,71 @@ Expected shape:
 }
 ```
 
+### Architect Brief Preview
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"taskId":"<notion-page-id>","dryRun":true}'
+```
+
+A successful preview returns the generated `brief` plus an `approval` token. The token expires after 120 minutes.
+
+```json
+{
+  "ok": true,
+  "taskId": "<notion-page-id>",
+  "dryRun": true,
+  "statusUpdated": false,
+  "briefGenerated": true,
+  "brief": {
+    "briefTitle": "..."
+  },
+  "approval": {
+    "action": "architect-brief-writeback",
+    "token": "...",
+    "briefHash": "...",
+    "previewRunId": "run_...",
+    "expiresAt": "2026-05-15T14:00:00.000Z"
+  },
+  "run": {
+    "runId": "run_...",
+    "workflow": "architect-review",
+    "taskId": "<notion-page-id>",
+    "dryRun": true,
+    "outcome": "succeeded",
+    "briefGenerated": true,
+    "notionWriteback": false,
+    "statusUpdated": false
+  }
+}
+```
+
+### Approve Architect Brief Writeback
+
+Approval writes the exact previewed brief from the signed token. It does not rerun the Architect Agent or call OpenAI.
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/architect-review/approve \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"approvalToken":"<approval-token-from-preview>"}'
+```
+
+A successful approval appends the Architect Brief to the same Notion page and updates the configured status property after the append succeeds. The endpoint rejects missing, invalid, tampered, or expired approval tokens.
+
+### Architect Review Writeback
+
+The legacy direct writeback path remains available, but the Operator Console uses preview approval instead so the written brief is exactly what the operator reviewed.
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"taskId":"<notion-page-id>","dryRun":false}'
+```
+
 ### Run Ready Architecture Tasks
 
 Dry-run every task currently marked `Ready for Architecture`:
@@ -150,71 +236,7 @@ curl -X POST http://127.0.0.1:3000/agent-office/run-ready-architecture \
   -d '{"dryRun":false}'
 ```
 
-Expected summary shape:
-
-```json
-{
-  "ok": true,
-  "dryRun": true,
-  "summary": {
-    "processed": 1,
-    "skipped": 0,
-    "failed": 0
-  },
-  "processed": [],
-  "skipped": [],
-  "failed": [],
-  "runs": []
-}
-```
-
 For real runs, the API checks whether the task page already contains an `Architect Brief:` marker before invoking the workflow. If it does, that task is skipped to avoid duplicate writebacks.
-
-### Architect Review Dry Run
-
-```bash
-curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
-  -H "Content-Type: application/json" \
-  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
-  -d '{"taskId":"<notion-page-id>","dryRun":true}'
-```
-
-Expected shape:
-
-```json
-{
-  "ok": true,
-  "taskId": "<notion-page-id>",
-  "dryRun": true,
-  "statusUpdated": false,
-  "briefGenerated": true,
-  "run": {
-    "runId": "run_...",
-    "workflow": "architect-review",
-    "taskId": "<notion-page-id>",
-    "dryRun": true,
-    "outcome": "succeeded",
-    "briefGenerated": true,
-    "notionWriteback": false,
-    "statusUpdated": false,
-    "startedAt": "2026-05-14T12:00:00.000Z",
-    "finishedAt": "2026-05-14T12:00:01.000Z"
-  }
-}
-```
-
-### Architect Review Writeback
-
-Only run this after the dry run looks correct:
-
-```bash
-curl -X POST http://127.0.0.1:3000/agent-office/architect-review \
-  -H "Content-Type: application/json" \
-  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
-  -d '{"taskId":"<notion-page-id>","dryRun":false}'
-```
-
-A successful real writeback appends the Architect Brief to the same Notion page and updates the configured status property after the append succeeds.
 
 ## Vercel Deployment Preparation
 
@@ -222,6 +244,7 @@ This repo includes explicit Vercel function entrypoints under `api/` and minimal
 
 ```text
 /health
+/office
 /agent-office/*
 ```
 
@@ -237,6 +260,7 @@ Required Vercel environment variables:
 - `NOTION_TOKEN`
 - `NOTION_TASK_DATABASE_ID`
 - `AGENT_OFFICE_API_KEY`
+- `AGENT_OFFICE_APPROVAL_SECRET`
 
 Recommended explicit Vercel environment variables:
 
@@ -250,7 +274,7 @@ Recommended explicit Vercel environment variables:
 - `DRY_RUN=false`
 - `LOG_LEVEL=info`
 
-Use a long random value for `AGENT_OFFICE_API_KEY`. Do not expose it in frontend code, commit it to Git, or paste it into Notion task content.
+Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. Do not expose either one in frontend code, commit them to Git, or paste them into Notion task content. The approval secret signs short-lived approval tokens and should be different from the API key.
 
 For runtime parity with CI, use Node.js 20 or newer. Node 20 is the current CI baseline.
 
@@ -269,7 +293,11 @@ Check public health:
 curl "$DEPLOYMENT_URL/health"
 ```
 
-Expected: `ok: true` and no sensitive configuration values.
+Open the Operator Console:
+
+```text
+https://<your-vercel-deployment-url>/office
+```
 
 Confirm protected routes reject missing API keys:
 
@@ -297,7 +325,9 @@ curl -X POST "$DEPLOYMENT_URL/agent-office/architect-review" \
   -d '{"taskId":"<safe-test-notion-page-id>","dryRun":true}'
 ```
 
-Expected: `ok: true`, `briefGenerated: true`, `dryRun: true`, `statusUpdated: false`, and `run.notionWriteback: false`. After the dry-run, inspect the Notion task and confirm that no Architect Brief was appended and the Status did not change.
+Expected: `ok: true`, `briefGenerated: true`, `dryRun: true`, `statusUpdated: false`, `run.notionWriteback: false`, a visible `brief`, and an `approval.expiresAt` about 120 minutes in the future. After the dry-run, inspect the Notion task and confirm that no Architect Brief was appended and the Status did not change.
+
+Only after the preview looks correct, approve using the returned token or the `/office` console. Confirm the exact reviewed brief was appended and `Status` moved to `Ready for Codex`.
 
 ## Run Log
 
@@ -333,6 +363,7 @@ The run log is intentionally local and append-only for now. It is not committed 
 See `.env.example` for required values. For the default v0 workflow:
 
 - `AGENT_OFFICE_API_KEY` is required to start the HTTP API server and must be sent as `x-agent-office-api-key` for every `/agent-office/*` request.
+- `AGENT_OFFICE_APPROVAL_SECRET` is required to sign and verify Architect Brief approval tokens. Use a long random value that is different from `AGENT_OFFICE_API_KEY`.
 - `NOTION_TASK_DATABASE_ID` should be the AI Build Tasks database ID.
 - `NOTION_STATUS_PROPERTY_TYPE` should match the Notion property type for the configured status property. The current AI Build Tasks board uses `select`; use `status` only if the Notion property is converted to a native Notion status property.
 - `NOTION_READY_FOR_ARCHITECTURE_STATUS` should match the exact Notion status option used for tasks awaiting architecture review, usually `Ready for Architecture`.
@@ -345,19 +376,21 @@ The Notion integration must have permission to read the task database, read task
 
 Before any hosted deployment:
 
-1. Configure `OPENAI_API_KEY`, `NOTION_TOKEN`, `NOTION_TASK_DATABASE_ID`, and `AGENT_OFFICE_API_KEY` as platform-managed environment variables or secrets.
-2. Use a long random `AGENT_OFFICE_API_KEY`; do not expose it in frontend code or commit it to Git.
+1. Configure `OPENAI_API_KEY`, `NOTION_TOKEN`, `NOTION_TASK_DATABASE_ID`, `AGENT_OFFICE_API_KEY`, and `AGENT_OFFICE_APPROVAL_SECRET` as platform-managed environment variables or secrets.
+2. Use long random values for Agent Office secrets; do not expose them in frontend code or commit them to Git.
 3. Confirm the Notion integration is scoped only to the intended AI Build Tasks database and task pages.
-4. Keep `/health` public but generic; all `/agent-office/*` routes must require the API key.
+4. Keep `/health` and `/office` public but generic; all `/agent-office/*` routes must require the API key.
 5. On Vercel, set `RUN_LOG_PATH` to `/tmp/agent-office-run-log.jsonl` or rely on the adapter default, and do not treat it as durable storage.
 6. Run a live dry-run against one safe test task before any real writeback.
-7. Run the first real writeback against one safe test task only after the dry-run output looks correct.
-8. Confirm the Architect Brief was appended and `Status` moved to `Ready for Codex`.
+7. Approve the first real writeback against one safe test task only after the preview output looks correct.
+8. Confirm the exact approved Architect Brief was appended and `Status` moved to `Ready for Codex`.
 9. Treat structured API responses and hosted platform logs as the first live traceability layer. Do not rely on local JSONL logs as durable hosted audit storage without a persistent volume or future database-backed run log.
 
 ## Safety Model
 
 The Architect Agent does not receive tools that can mutate external systems. It only returns a structured `ArchitectBrief`. The TypeScript workflow owns side effects and performs Notion writes in a fixed order.
+
+The Operator Console uses a preview -> signed approval token -> execute flow. The preview step runs the model once. The approval step verifies the API key and approval token, then writes the exact structured brief embedded in that token. It does not rerun the model.
 
 The HTTP API is intentionally thin: it validates requests, authorizes Agent Office routes, calls the existing workflow layer, records run summaries, and returns JSON. It does not duplicate Notion write logic.
 

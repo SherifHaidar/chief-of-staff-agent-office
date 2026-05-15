@@ -19,6 +19,13 @@ export type ArchitectTaskWorkflowInput = {
   statusAfterWriteback: string;
 };
 
+export type ApprovedArchitectBriefWritebackInput = {
+  brief: ArchitectBrief;
+  pageId: string;
+  statusAfterWriteback: string;
+  taskName?: string;
+};
+
 export type ArchitectTaskWorkflowDependencies = {
   architect: ArchitectAgentRunner;
   logger?: Logger;
@@ -84,6 +91,41 @@ export class ArchitectTaskWorkflow {
     } catch (error) {
       const serialized = serializeError(error);
       this.logger.error("Architect task workflow failed", { error: serialized.message, pageId });
+
+      return {
+        error: serialized,
+        ok: false,
+        pageId,
+      };
+    }
+  }
+
+  async writeApprovedBrief(input: ApprovedArchitectBriefWritebackInput): Promise<WorkflowResult> {
+    let pageId: string | undefined;
+
+    try {
+      pageId = normalizeNotionPageId(input.pageId);
+      this.logger.info("Appending approved Architect Brief to Notion", { pageId });
+      await this.taskRepository.appendArchitectBrief(pageId, input.brief, this.now());
+
+      this.logger.info("Updating Notion task status after approved writeback", {
+        pageId,
+        status: input.statusAfterWriteback,
+      });
+      await this.taskRepository.markArchitectBriefReady(pageId, input.statusAfterWriteback);
+
+      return {
+        brief: input.brief,
+        dryRun: false,
+        ok: true,
+        pageId,
+        statusUpdated: true,
+        title: input.taskName ?? "Approved Architect Brief",
+        wroteToNotion: true,
+      };
+    } catch (error) {
+      const serialized = serializeError(error);
+      this.logger.error("Approved Architect Brief writeback failed", { error: serialized.message, pageId });
 
       return {
         error: serialized,

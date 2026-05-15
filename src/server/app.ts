@@ -3,19 +3,32 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 
+import {
+  ArchitectBriefApprovalTokenError,
+  createArchitectBriefApproval,
+  verifyArchitectBriefApproval,
+} from "../approval/architect-brief-approval.js";
 import type { RunLog } from "../audit/run-log.js";
 import { noopRunLog } from "../audit/run-log.js";
 import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
-import type { ArchitectTaskWorkflowInput } from "../workflows/architect-task.workflow.js";
+import type {
+  ApprovedArchitectBriefWritebackInput,
+  ArchitectTaskWorkflowInput,
+} from "../workflows/architect-task.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
+import { renderOperatorConsolePage } from "./operator-console-page.js";
 
 const API_KEY_HEADER = "x-agent-office-api-key";
 const AGENT_OFFICE_ROUTE_PREFIX = "/agent-office/";
 
 export type ArchitectReviewWorkflow = {
   run(input: ArchitectTaskWorkflowInput): Promise<WorkflowResult>;
+};
+
+export type ApprovedArchitectBriefWriter = {
+  writeApprovedBrief(input: ApprovedArchitectBriefWritebackInput): Promise<WorkflowResult>;
 };
 
 export type ReadyArchitectureTaskScanner = {
@@ -25,6 +38,8 @@ export type ReadyArchitectureTaskScanner = {
 
 export type AgentOfficeAppOptions = {
   apiKey: string;
+  approvalSecret: string;
+  approvedBriefWriter: ApprovedArchitectBriefWriter;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   runLog?: RunLog;
   statusAfterWriteback: string;
@@ -35,6 +50,12 @@ const ArchitectReviewRequestSchema = z
   .object({
     dryRun: z.boolean().default(true),
     taskId: z.string().trim().min(1, "taskId is required"),
+  })
+  .strict();
+
+const ArchitectReviewApprovalRequestSchema = z
+  .object({
+    approvalToken: z.string().trim().min(1, "approvalToken is required"),
   })
   .strict();
 
@@ -93,12 +114,12 @@ function isAuthorizedApiKey(headerValue: unknown, expectedApiKey: string): boole
   return timingSafeEqual(hashApiKey(headerValue), hashApiKey(expectedApiKey));
 }
 
-function requireConfiguredApiKey(apiKey: string): string {
-  if (apiKey.trim().length === 0) {
-    throw new Error("Agent Office API key must be configured.");
+function requireConfiguredSecret(value: string, name: string): string {
+  if (value.trim().length === 0) {
+    throw new Error(`${name} must be configured.`);
   }
 
-  return apiKey;
+  return value;
 }
 
 function withOptionalFields(
@@ -184,7 +205,8 @@ async function recordRun(runLog: RunLog, summary: AgentOfficeRunSummary): Promis
 export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const runLog = options.runLog ?? noopRunLog;
-  const apiKey = requireConfiguredApiKey(options.apiKey);
+  const apiKey = requireConfiguredSecret(options.apiKey, "Agent Office API key");
+  const approvalSecret = requireConfiguredSecret(options.approvalSecret, "Agent Office approval secret");
 
   app.setErrorHandler((error, request, reply) =>
     reply.code(getHttpStatusCode(error)).send({
@@ -212,6 +234,8 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     service: "chief-of-staff-agent-office",
     status: "healthy",
   }));
+
+  app.get("/office", async (_request, reply) => reply.type("text/html; charset=utf-8").send(renderOperatorConsolePage()));
 
   app.get("/agent-office/tasks/ready-for-architecture", async () => {
     const tasks = await options.readyArchitectureScanner.findReadyForArchitectureTasks();
@@ -259,9 +283,133 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       });
     }
 
+    const approval = result.dryRun
+      ? createArchitectBriefApproval({
+          brief: result.brief,
+          previewRunId: run.runId,
+          secret: approvalSecret,
+          statusAfterWriteback: options.statusAfterWriteback,
+          taskId: result.pageId,
+          taskName: result.title,
+        })
+      : undefined;
+
     return reply.send({
+      ...(result.dryRun ? { approval, brief: result.brief } : {}),
       briefGenerated: Boolean(result.brief),
       dryRun: result.dryRun,
+      ok: true,
+      run,
+      statusUpdated: result.statusUpdated,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/architect-review/approve", async (request, reply) => {
+    const parsed = ArchitectReviewApprovalRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+      });
+    }
+
+    let approval;
+    try {
+      approval = verifyArchitectBriefApproval({
+        secret: approvalSecret,
+        token: parsed.data.approvalToken,
+      });
+    } catch (error) {
+      if (error instanceof ArchitectBriefApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+        });
+      }
+
+      throw error;
+    }
+
+    const startedAt = new Date();
+    const runId = createRunId(startedAt);
+
+    try {
+      const alreadyHasBrief = await options.readyArchitectureScanner.hasArchitectBrief(approval.taskId);
+      if (alreadyHasBrief) {
+        const run = buildRunSummary({
+          dryRun: false,
+          finishedAt: new Date(),
+          reason: "Architect Brief already exists on task page.",
+          runId,
+          startedAt,
+          taskId: approval.taskId,
+          taskName: approval.taskName,
+        });
+        await recordRun(runLog, run);
+
+        return reply.code(409).send({
+          error: run.reason,
+          ok: false,
+          run,
+          taskId: approval.taskId,
+        });
+      }
+    } catch (error) {
+      const run = buildRunSummary({
+        dryRun: false,
+        error: getErrorMessage(error),
+        finishedAt: new Date(),
+        runId,
+        startedAt,
+        taskId: approval.taskId,
+        taskName: approval.taskName,
+      });
+      await recordRun(runLog, run);
+
+      return reply.code(500).send({
+        error: run.error,
+        ok: false,
+        run,
+        taskId: approval.taskId,
+      });
+    }
+
+    const result = await options.approvedBriefWriter.writeApprovedBrief({
+      brief: approval.brief,
+      pageId: approval.taskId,
+      statusAfterWriteback: approval.statusAfterWriteback,
+      ...(approval.taskName ? { taskName: approval.taskName } : {}),
+    });
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId,
+      startedAt,
+      taskId: approval.taskId,
+      taskName: approval.taskName,
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowErrorStatus(result.error.message)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? approval.taskId,
+      });
+    }
+
+    return reply.send({
+      approval: {
+        briefHash: approval.briefHash,
+        expiresAt: approval.expiresAt,
+        previewRunId: approval.previewRunId,
+      },
+      briefGenerated: true,
+      dryRun: false,
       ok: true,
       run,
       statusUpdated: result.statusUpdated,
