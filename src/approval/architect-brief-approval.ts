@@ -3,6 +3,11 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { ArchitectBriefSchema, type ArchitectBrief } from "../domain/architect-brief.js";
+import {
+  ArchitectBriefApprovalMetadataSchema,
+  createArchitectBriefApprovalMetadata,
+  type ArchitectBriefApprovalMetadata,
+} from "../domain/architect-brief-writeback.js";
 
 export const ARCHITECT_BRIEF_APPROVAL_ACTION = "architect-brief-writeback";
 export const ARCHITECT_BRIEF_APPROVAL_TTL_MINUTES = 120;
@@ -14,6 +19,7 @@ const ArchitectBriefApprovalPayloadSchema = z
     briefHash: z.string().min(1),
     createdAt: z.string().datetime(),
     expiresAt: z.string().datetime(),
+    metadata: ArchitectBriefApprovalMetadataSchema,
     previewRunId: z.string().min(1),
     statusAfterWriteback: z.string().min(1),
     taskId: z.string().min(1),
@@ -27,8 +33,10 @@ export type SignedArchitectBriefApproval = {
   action: typeof ARCHITECT_BRIEF_APPROVAL_ACTION;
   briefHash: string;
   createdAt: string;
+  decisionStatus: ArchitectBriefApprovalMetadata["decisionStatus"];
   expiresAt: string;
   previewRunId: string;
+  revisionNumber: number;
   token: string;
 };
 
@@ -73,6 +81,7 @@ export function hashArchitectBrief(brief: ArchitectBrief): string {
 
 export function createArchitectBriefApproval(input: {
   brief: ArchitectBrief;
+  metadata?: ArchitectBriefApprovalMetadata;
   now?: Date;
   previewRunId: string;
   secret: string;
@@ -84,12 +93,14 @@ export function createArchitectBriefApproval(input: {
   const createdAt = input.now ?? new Date();
   const expiresAt = new Date(createdAt.getTime() + (input.ttlMinutes ?? ARCHITECT_BRIEF_APPROVAL_TTL_MINUTES) * 60_000);
   const brief = ArchitectBriefSchema.parse(input.brief);
+  const metadata = input.metadata ?? createArchitectBriefApprovalMetadata({ brief });
   const payload: ArchitectBriefApprovalPayload = {
     action: ARCHITECT_BRIEF_APPROVAL_ACTION,
     brief,
     briefHash: hashArchitectBrief(brief),
     createdAt: createdAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
+    metadata,
     previewRunId: input.previewRunId,
     statusAfterWriteback: input.statusAfterWriteback,
     taskId: input.taskId,
@@ -102,8 +113,10 @@ export function createArchitectBriefApproval(input: {
     action: ARCHITECT_BRIEF_APPROVAL_ACTION,
     briefHash: payload.briefHash,
     createdAt: payload.createdAt,
+    decisionStatus: payload.metadata.decisionStatus,
     expiresAt: payload.expiresAt,
     previewRunId: payload.previewRunId,
+    revisionNumber: payload.metadata.revisionNumber,
     token: `${encodedPayload}.${signature}`,
   };
 }
