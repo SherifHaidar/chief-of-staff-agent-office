@@ -7,6 +7,7 @@ import { consoleLogger } from "./utils/logger.js";
 import { ArchitectTaskWorkflow } from "./workflows/architect-task.workflow.js";
 
 export * from "./agents/architect.agent.js";
+export * from "./approval/architect-brief-approval.js";
 export * from "./audit/run-log.js";
 export * from "./audit/run-summary.js";
 export * from "./config/env.js";
