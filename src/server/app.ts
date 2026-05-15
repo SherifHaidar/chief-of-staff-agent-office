@@ -8,6 +8,11 @@ import {
   createArchitectBriefApproval,
   verifyArchitectBriefApproval,
 } from "../approval/architect-brief-approval.js";
+import {
+  CodexHandoffApprovalTokenError,
+  createCodexHandoffApproval,
+  verifyCodexHandoffApproval,
+} from "../approval/codex-handoff-approval.js";
 import type { RunLog } from "../audit/run-log.js";
 import { noopRunLog } from "../audit/run-log.js";
 import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
@@ -17,6 +22,11 @@ import type {
   ApprovedArchitectBriefWritebackInput,
   ArchitectTaskWorkflowInput,
 } from "../workflows/architect-task.workflow.js";
+import type {
+  ApprovedCodexHandoffWritebackInput,
+  CodexHandoffWorkflowInput,
+  CodexHandoffWorkflowResult,
+} from "../workflows/codex-handoff.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
 import { renderOperatorConsolePage } from "./operator-console-page.js";
 
@@ -36,15 +46,35 @@ export type ReadyArchitectureTaskScanner = {
   hasArchitectBrief(taskId: string): Promise<boolean>;
 };
 
+export type CodexHandoffWorkflowRunner = {
+  run(input: CodexHandoffWorkflowInput): Promise<CodexHandoffWorkflowResult>;
+};
+
+export type ApprovedCodexHandoffWriter = {
+  writeApprovedHandoff(input: ApprovedCodexHandoffWritebackInput): Promise<CodexHandoffWorkflowResult>;
+};
+
+export type ReadyCodexTaskScanner = {
+  findReadyForCodexTasks(): Promise<ReadyArchitectureTask[]>;
+  hasCodexHandoffBrief(taskId: string): Promise<boolean>;
+};
+
 export type AgentOfficeAppOptions = {
   apiKey: string;
   approvalSecret: string;
   approvedBriefWriter: ApprovedArchitectBriefWriter;
+  approvedCodexHandoffWriter?: ApprovedCodexHandoffWriter;
+  codexHandoffWorkflow?: CodexHandoffWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
+  readyCodexScanner?: ReadyCodexTaskScanner;
   runLog?: RunLog;
+  statusAfterCodexHandoff?: string;
   statusAfterWriteback: string;
+  targetProductRepo?: string;
   workflow: ArchitectReviewWorkflow;
 };
+
+type AnyWorkflowResult = CodexHandoffWorkflowResult | WorkflowResult;
 
 const ArchitectReviewRequestSchema = z
   .object({
@@ -54,6 +84,18 @@ const ArchitectReviewRequestSchema = z
   .strict();
 
 const ArchitectReviewApprovalRequestSchema = z
+  .object({
+    approvalToken: z.string().trim().min(1, "approvalToken is required"),
+  })
+  .strict();
+
+const CodexHandoffRequestSchema = z
+  .object({
+    taskId: z.string().trim().min(1, "taskId is required"),
+  })
+  .strict();
+
+const CodexHandoffApprovalRequestSchema = z
   .object({
     approvalToken: z.string().trim().min(1, "approvalToken is required"),
   })
@@ -122,6 +164,14 @@ function requireConfiguredSecret(value: string, name: string): string {
   return value;
 }
 
+function requireConfiguredFeature<T>(value: T | undefined, name: string): T {
+  if (!value) {
+    throw new Error(`${name} is not configured.`);
+  }
+
+  return value;
+}
+
 function withOptionalFields(
   summary: AgentOfficeRunSummary,
   optional: { error?: string; reason?: string; taskName?: string },
@@ -134,24 +184,33 @@ function withOptionalFields(
   };
 }
 
+function resultHasBrief(result: AnyWorkflowResult): boolean {
+  if (!result.ok) {
+    return false;
+  }
+
+  return "brief" in result ? Boolean(result.brief) : Boolean(result.handoff);
+}
+
 function buildRunSummary(input: {
   dryRun: boolean;
   error?: string;
   finishedAt: Date;
   reason?: string;
-  result?: WorkflowResult;
+  result?: AnyWorkflowResult;
   runId: string;
   startedAt: Date;
   taskId: string;
   taskName?: string;
+  workflow?: AgentOfficeRunSummary["workflow"];
 }): AgentOfficeRunSummary {
   const base = {
     dryRun: input.dryRun,
     finishedAt: input.finishedAt.toISOString(),
     runId: input.runId,
     startedAt: input.startedAt.toISOString(),
-    workflow: "architect-review" as const,
-  };
+    workflow: input.workflow ?? "architect-review",
+  } satisfies Pick<AgentOfficeRunSummary, "dryRun" | "finishedAt" | "runId" | "startedAt" | "workflow">;
 
   if (input.reason) {
     return withOptionalFields(
@@ -180,14 +239,14 @@ function buildRunSummary(input: {
         statusUpdated: false,
         taskId: pageId ?? input.taskId,
       },
-      { error: error ?? "Architect workflow failed.", taskName: input.taskName },
+      { error: error ?? "Agent Office workflow failed.", taskName: input.taskName },
     );
   }
 
   return withOptionalFields(
     {
       ...base,
-      briefGenerated: Boolean(input.result.brief),
+      briefGenerated: resultHasBrief(input.result),
       dryRun: input.result.dryRun,
       notionWriteback: input.result.wroteToNotion,
       outcome: "succeeded",
@@ -239,6 +298,16 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
 
   app.get("/agent-office/tasks/ready-for-architecture", async () => {
     const tasks = await options.readyArchitectureScanner.findReadyForArchitectureTasks();
+
+    return {
+      ok: true,
+      tasks,
+    };
+  });
+
+  app.get("/agent-office/tasks/ready-for-codex", async () => {
+    const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
+    const tasks = await scanner.findReadyForCodexTasks();
 
     return {
       ok: true,
@@ -410,6 +479,187 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       },
       briefGenerated: true,
       dryRun: false,
+      ok: true,
+      run,
+      statusUpdated: result.statusUpdated,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-handoff", async (request, reply) => {
+    const parsed = CodexHandoffRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = requireConfiguredFeature(options.codexHandoffWorkflow, "Codex Handoff workflow");
+    const targetProductRepo = requireConfiguredFeature(options.targetProductRepo, "Target product repository");
+    const { taskId } = parsed.data;
+    const startedAt = new Date();
+    const result = await workflow.run({
+      dryRun: true,
+      pageId: taskId,
+      statusAfterWriteback: options.statusAfterCodexHandoff,
+      targetProductRepo,
+    });
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId,
+      workflow: "codex-handoff",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowErrorStatus(result.error.message)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? taskId,
+      });
+    }
+
+    const approval = createCodexHandoffApproval({
+      handoff: result.handoff,
+      previewRunId: run.runId,
+      secret: approvalSecret,
+      statusAfterWriteback: options.statusAfterCodexHandoff,
+      targetProductRepo,
+      taskId: result.pageId,
+      taskName: result.title,
+    });
+
+    return reply.send({
+      approval,
+      dryRun: true,
+      handoff: result.handoff,
+      handoffGenerated: true,
+      ok: true,
+      run,
+      statusUpdated: false,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-handoff/approve", async (request, reply) => {
+    const parsed = CodexHandoffApprovalRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+      });
+    }
+
+    let approval;
+    try {
+      approval = verifyCodexHandoffApproval({
+        secret: approvalSecret,
+        token: parsed.data.approvalToken,
+      });
+    } catch (error) {
+      if (error instanceof CodexHandoffApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+        });
+      }
+
+      throw error;
+    }
+
+    const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
+    const writer = requireConfiguredFeature(options.approvedCodexHandoffWriter, "Approved Codex Handoff writer");
+    const startedAt = new Date();
+    const runId = createRunId(startedAt);
+
+    try {
+      const alreadyHasBrief = await scanner.hasCodexHandoffBrief(approval.taskId);
+      if (alreadyHasBrief) {
+        const run = buildRunSummary({
+          dryRun: false,
+          finishedAt: new Date(),
+          reason: "Codex Handoff Brief already exists on task page.",
+          runId,
+          startedAt,
+          taskId: approval.taskId,
+          taskName: approval.taskName,
+          workflow: "codex-handoff",
+        });
+        await recordRun(runLog, run);
+
+        return reply.code(409).send({
+          error: run.reason,
+          ok: false,
+          run,
+          taskId: approval.taskId,
+        });
+      }
+    } catch (error) {
+      const run = buildRunSummary({
+        dryRun: false,
+        error: getErrorMessage(error),
+        finishedAt: new Date(),
+        runId,
+        startedAt,
+        taskId: approval.taskId,
+        taskName: approval.taskName,
+        workflow: "codex-handoff",
+      });
+      await recordRun(runLog, run);
+
+      return reply.code(500).send({
+        error: run.error,
+        ok: false,
+        run,
+        taskId: approval.taskId,
+      });
+    }
+
+    const result = await writer.writeApprovedHandoff({
+      handoff: approval.handoff,
+      pageId: approval.taskId,
+      statusAfterWriteback: approval.statusAfterWriteback,
+      targetProductRepo: approval.targetProductRepo,
+      ...(approval.taskName ? { taskName: approval.taskName } : {}),
+    });
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId,
+      startedAt,
+      taskId: approval.taskId,
+      taskName: approval.taskName,
+      workflow: "codex-handoff",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowErrorStatus(result.error.message)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? approval.taskId,
+      });
+    }
+
+    return reply.send({
+      approval: {
+        expiresAt: approval.expiresAt,
+        handoffHash: approval.handoffHash,
+        previewRunId: approval.previewRunId,
+      },
+      dryRun: false,
+      handoffGenerated: true,
       ok: true,
       run,
       statusUpdated: result.statusUpdated,

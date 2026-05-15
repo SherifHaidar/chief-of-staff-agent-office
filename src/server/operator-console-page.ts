@@ -31,8 +31,8 @@ export function renderOperatorConsolePage(): string {
     .grid { display: grid; grid-template-columns: minmax(280px, 390px) minmax(0, 1fr); gap: 18px; align-items: start; }
     section, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
     label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
-    input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
-    input:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
+    input, select { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
+    input:focus, select:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
     button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; min-height: 38px; padding: 8px 12px; font: inherit; font-weight: 650; cursor: pointer; }
     button:hover { border-color: var(--accent); color: var(--accent-strong); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -75,6 +75,13 @@ export function renderOperatorConsolePage(): string {
     <div class="grid">
       <section class="stack">
         <div>
+          <label for="deskMode">Desk</label>
+          <select id="deskMode">
+            <option value="architecture">Architecture Desk</option>
+            <option value="implementation">Implementation Desk</option>
+          </select>
+        </div>
+        <div>
           <label for="apiKey">API key</label>
           <input id="apiKey" type="password" autocomplete="off" placeholder="x-agent-office-api-key">
         </div>
@@ -112,33 +119,65 @@ export function renderOperatorConsolePage(): string {
   </main>
 
   <script>
+    const desks = {
+      architecture: {
+        approveEndpoint: "/agent-office/architect-review/approve",
+        artifactKey: "brief",
+        hashKey: "briefHash",
+        previewEndpoint: "/agent-office/architect-review",
+        previewTitle: "Architect Brief Preview",
+        readyLabel: "Ready for Architecture",
+        taskEndpoint: "/agent-office/tasks/ready-for-architecture",
+        workflowName: "Architecture Desk"
+      },
+      implementation: {
+        approveEndpoint: "/agent-office/codex-handoff/approve",
+        artifactKey: "handoff",
+        hashKey: "handoffHash",
+        previewEndpoint: "/agent-office/codex-handoff",
+        previewTitle: "Codex Handoff Preview",
+        readyLabel: "Ready for Codex",
+        taskEndpoint: "/agent-office/tasks/ready-for-codex",
+        workflowName: "Implementation Desk"
+      }
+    };
+
     const state = {
       apiKey: sessionStorage.getItem("agentOfficeApiKey") || "",
-      tasks: [],
-      selectedTask: null,
       approval: null,
-      brief: null
+      artifact: null,
+      mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
+      selectedTask: null,
+      tasks: []
     };
 
     const apiKeyInput = document.getElementById("apiKey");
-    const saveKeyButton = document.getElementById("saveKeyButton");
-    const loadTasksButton = document.getElementById("loadTasksButton");
-    const clearButton = document.getElementById("clearButton");
-    const taskList = document.getElementById("taskList");
-    const taskStatus = document.getElementById("taskStatus");
-    const previewButton = document.getElementById("previewButton");
     const approveButton = document.getElementById("approveButton");
-    const previewStatus = document.getElementById("previewStatus");
-    const globalStatus = document.getElementById("globalStatus");
-    const briefPreview = document.getElementById("briefPreview");
-    const selectedTaskTitle = document.getElementById("selectedTaskTitle");
-    const selectedTaskMeta = document.getElementById("selectedTaskMeta");
     const approvalPanel = document.getElementById("approvalPanel");
     const briefHash = document.getElementById("briefHash");
+    const briefPreview = document.getElementById("briefPreview");
+    const clearButton = document.getElementById("clearButton");
+    const deskMode = document.getElementById("deskMode");
     const expiresAt = document.getElementById("expiresAt");
+    const globalStatus = document.getElementById("globalStatus");
+    const loadTasksButton = document.getElementById("loadTasksButton");
+    const previewButton = document.getElementById("previewButton");
+    const previewStatus = document.getElementById("previewStatus");
     const result = document.getElementById("result");
+    const saveKeyButton = document.getElementById("saveKeyButton");
+    const selectedTaskMeta = document.getElementById("selectedTaskMeta");
+    const selectedTaskTitle = document.getElementById("selectedTaskTitle");
+    const taskList = document.getElementById("taskList");
+    const taskStatus = document.getElementById("taskStatus");
 
     apiKeyInput.value = state.apiKey;
+    deskMode.value = desks[state.mode] ? state.mode : "architecture";
+    state.mode = deskMode.value;
+    resetSelection();
+
+    function activeDesk() {
+      return desks[state.mode];
+    }
 
     function setStatus(element, message, type) {
       element.textContent = message;
@@ -167,6 +206,24 @@ export function renderOperatorConsolePage(): string {
       return payload;
     }
 
+    function resetSelection() {
+      const desk = activeDesk();
+      state.approval = null;
+      state.artifact = null;
+      state.selectedTask = null;
+      state.tasks = [];
+      selectedTaskTitle.textContent = desk.previewTitle;
+      selectedTaskMeta.textContent = "No task selected";
+      previewButton.disabled = true;
+      approveButton.disabled = true;
+      approvalPanel.hidden = true;
+      result.hidden = true;
+      taskList.innerHTML = "";
+      briefPreview.innerHTML = '<div class="empty">Select a ' + escapeHtml(desk.readyLabel) + ' task.</div>';
+      setStatus(previewStatus, "");
+      setStatus(taskStatus, "");
+    }
+
     function renderTasks() {
       taskList.innerHTML = "";
       if (state.tasks.length === 0) {
@@ -187,9 +244,9 @@ export function renderOperatorConsolePage(): string {
     function selectTask(task) {
       state.selectedTask = task;
       state.approval = null;
-      state.brief = null;
+      state.artifact = null;
       selectedTaskTitle.textContent = task.name;
-      selectedTaskMeta.textContent = task.status + " · " + task.taskId;
+      selectedTaskMeta.textContent = task.status + " / " + task.taskId;
       previewButton.disabled = false;
       approveButton.disabled = true;
       approvalPanel.hidden = true;
@@ -198,7 +255,16 @@ export function renderOperatorConsolePage(): string {
       setStatus(previewStatus, "");
     }
 
-    function renderBrief(brief) {
+    function renderArtifact(artifact) {
+      if (state.mode === "implementation") {
+        renderCodexHandoff(artifact);
+        return;
+      }
+
+      renderArchitectBrief(artifact);
+    }
+
+    function renderArchitectBrief(brief) {
       const sections = [
         ["Recommended Architecture", brief.recommendedArchitecture],
         ["File Structure", brief.fileStructure],
@@ -212,6 +278,28 @@ export function renderOperatorConsolePage(): string {
       briefPreview.innerHTML = '<div class="brief-title">' + escapeHtml(brief.briefTitle) + '</div><p>' + escapeHtml(brief.executiveSummary) + '</p>' + sections.map(function (section) {
         return renderList(section[0], section[1]);
       }).join("");
+    }
+
+    function renderCodexHandoff(handoff) {
+      const sections = [
+        ["Implementation Scope", handoff.implementationScope],
+        ["Likely Affected Files or Modules", handoff.likelyAffectedFiles],
+        ["Constraints / Do Not Change", handoff.constraints],
+        ["Implementation Steps", handoff.implementationSteps],
+        ["Tests to Run", handoff.testsToRun],
+        ["Acceptance Checklist", handoff.acceptanceChecklist],
+        ["Merge / Deploy Approval Warnings", handoff.explicitApprovalWarnings]
+      ];
+
+      briefPreview.innerHTML = [
+        '<div class="brief-title">' + escapeHtml(handoff.suggestedPrTitle) + '</div>',
+        '<p><strong>Target repo:</strong> ' + escapeHtml(handoff.targetProductRepo) + '</p>',
+        '<p><strong>Suggested branch:</strong> ' + escapeHtml(handoff.suggestedBranchName) + '</p>',
+        '<h3>Problem Summary</h3><p>' + escapeHtml(handoff.problemSummary) + '</p>',
+        '<h3>Product Intent</h3><p>' + escapeHtml(handoff.productIntent) + '</p>',
+        sections.map(function (section) { return renderList(section[0], section[1]); }).join(""),
+        '<h3>Suggested PR Body</h3><p>' + escapeHtml(handoff.suggestedPrBody) + '</p>'
+      ].join("");
     }
 
     function renderList(title, items) {
@@ -237,6 +325,12 @@ export function renderOperatorConsolePage(): string {
         .replaceAll("'", "&#039;");
     }
 
+    deskMode.addEventListener("change", function () {
+      state.mode = deskMode.value;
+      sessionStorage.setItem("agentOfficeDeskMode", state.mode);
+      resetSelection();
+    });
+
     saveKeyButton.addEventListener("click", function () {
       try {
         requireKey();
@@ -254,9 +348,10 @@ export function renderOperatorConsolePage(): string {
     });
 
     loadTasksButton.addEventListener("click", async function () {
+      const desk = activeDesk();
       try {
-        setStatus(taskStatus, "Loading tasks...");
-        const payload = await agentFetch("/agent-office/tasks/ready-for-architecture");
+        setStatus(taskStatus, "Loading " + desk.readyLabel + " tasks...");
+        const payload = await agentFetch(desk.taskEndpoint);
         state.tasks = payload.tasks || [];
         renderTasks();
         setStatus(taskStatus, String(state.tasks.length) + " ready task" + (state.tasks.length === 1 ? "" : "s") + ".", "ok");
@@ -270,19 +365,23 @@ export function renderOperatorConsolePage(): string {
         return;
       }
 
+      const desk = activeDesk();
       try {
         previewButton.disabled = true;
         approveButton.disabled = true;
         setStatus(previewStatus, "Generating preview...");
-        const payload = await agentFetch("/agent-office/architect-review", {
+        const body = state.mode === "architecture"
+          ? { taskId: state.selectedTask.taskId, dryRun: true }
+          : { taskId: state.selectedTask.taskId };
+        const payload = await agentFetch(desk.previewEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskId: state.selectedTask.taskId, dryRun: true })
+          body: JSON.stringify(body)
         });
         state.approval = payload.approval;
-        state.brief = payload.brief;
-        renderBrief(payload.brief);
-        briefHash.textContent = "Hash " + payload.approval.briefHash.slice(0, 12);
+        state.artifact = payload[desk.artifactKey];
+        renderArtifact(state.artifact);
+        briefHash.textContent = "Hash " + payload.approval[desk.hashKey].slice(0, 12);
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
         approvalPanel.hidden = false;
         approveButton.disabled = false;
@@ -300,10 +399,11 @@ export function renderOperatorConsolePage(): string {
         return;
       }
 
+      const desk = activeDesk();
       try {
         approveButton.disabled = true;
-        setStatus(previewStatus, "Writing approved brief...");
-        const payload = await agentFetch("/agent-office/architect-review/approve", {
+        setStatus(previewStatus, "Writing approved preview...");
+        const payload = await agentFetch(desk.approveEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ approvalToken: state.approval.token })
