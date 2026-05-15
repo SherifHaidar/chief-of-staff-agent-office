@@ -22,9 +22,11 @@ import type { RunLog } from "../audit/run-log.js";
 import { noopRunLog } from "../audit/run-log.js";
 import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
+import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import type {
   ApprovedArchitectBriefWritebackInput,
+  ArchitectBriefRevisionInput,
   ArchitectTaskWorkflowInput,
 } from "../workflows/architect-task.workflow.js";
 import type {
@@ -45,6 +47,7 @@ const AGENT_OFFICE_ROUTE_PREFIX = "/agent-office/";
 
 export type ArchitectReviewWorkflow = {
   run(input: ArchitectTaskWorkflowInput): Promise<WorkflowResult>;
+  revise?(input: ArchitectBriefRevisionInput): Promise<WorkflowResult>;
 };
 
 export type ApprovedArchitectBriefWriter = {
@@ -106,6 +109,14 @@ const ArchitectReviewRequestSchema = z
 const ArchitectReviewApprovalRequestSchema = z
   .object({
     approvalToken: z.string().trim().min(1, "approvalToken is required"),
+  })
+  .strict();
+
+const ArchitectReviewRevisionRequestSchema = z
+  .object({
+    previousApprovalToken: z.string().trim().min(1, "previousApprovalToken is required"),
+    revisionFeedback: z.string().trim().min(1, "revisionFeedback is required").max(8000),
+    taskId: z.string().trim().min(1, "taskId is required"),
   })
   .strict();
 
@@ -188,6 +199,10 @@ function hashApiKey(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
+function hashRevisionFeedback(value: string): string {
+  return createHash("sha256").update(value.trim(), "utf8").digest("hex");
+}
+
 function isAuthorizedApiKey(headerValue: unknown, expectedApiKey: string): boolean {
   if (typeof headerValue !== "string") {
     return false;
@@ -246,6 +261,9 @@ function buildRunSummary(input: {
   finishedAt: Date;
   reason?: string;
   result?: AnyWorkflowResult;
+  revisionFeedbackHash?: string;
+  revisionNumber?: number;
+  revisionOfPreviewRunId?: string;
   runId: string;
   startedAt: Date;
   taskId: string;
@@ -255,10 +273,23 @@ function buildRunSummary(input: {
   const base = {
     dryRun: input.dryRun,
     finishedAt: input.finishedAt.toISOString(),
+    ...(input.revisionFeedbackHash ? { revisionFeedbackHash: input.revisionFeedbackHash } : {}),
+    ...(input.revisionNumber ? { revisionNumber: input.revisionNumber } : {}),
+    ...(input.revisionOfPreviewRunId ? { revisionOfPreviewRunId: input.revisionOfPreviewRunId } : {}),
     runId: input.runId,
     startedAt: input.startedAt.toISOString(),
     workflow: input.workflow ?? "architect-review",
-  } satisfies Pick<AgentOfficeRunSummary, "dryRun" | "finishedAt" | "runId" | "startedAt" | "workflow">;
+  } satisfies Pick<
+    AgentOfficeRunSummary,
+    | "dryRun"
+    | "finishedAt"
+    | "revisionFeedbackHash"
+    | "revisionNumber"
+    | "revisionOfPreviewRunId"
+    | "runId"
+    | "startedAt"
+    | "workflow"
+  >;
 
   if (input.reason) {
     return withOptionalFields(
@@ -403,6 +434,11 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     const approval = result.dryRun
       ? createArchitectBriefApproval({
           brief: result.brief,
+          metadata: createArchitectBriefApprovalMetadata({
+            brief: result.brief,
+            productContext: result.productContext,
+            revisionNumber: 1,
+          }),
           previewRunId: run.runId,
           secret: approvalSecret,
           statusAfterWriteback: options.statusAfterWriteback,
@@ -419,6 +455,113 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       ...(result.productContext ? { productContext: result.productContext } : {}),
       run,
       statusUpdated: result.statusUpdated,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/architect-review/revise", async (request, reply) => {
+    const parsed = ArchitectReviewRevisionRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    let previousApproval;
+    try {
+      previousApproval = verifyArchitectBriefApproval({
+        secret: approvalSecret,
+        token: parsed.data.previousApprovalToken,
+      });
+    } catch (error) {
+      if (error instanceof ArchitectBriefApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+          taskId: parsed.data.taskId,
+        });
+      }
+
+      throw error;
+    }
+
+    if (previousApproval.taskId !== parsed.data.taskId) {
+      return reply.code(400).send({
+        error: "Revision taskId must match the previous approval token taskId.",
+        ok: false,
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const revise = requireConfiguredFeature(options.workflow.revise?.bind(options.workflow), "Architect Brief revision workflow");
+    const revisionNumber = previousApproval.metadata.revisionNumber + 1;
+    const revisionFeedbackHash = hashRevisionFeedback(parsed.data.revisionFeedback);
+    const startedAt = new Date();
+    const result = await revise({
+      pageId: parsed.data.taskId,
+      previousBrief: previousApproval.brief,
+      revisionFeedback: parsed.data.revisionFeedback,
+      revisionFeedbackHash,
+      revisionNumber,
+      revisionOfPreviewRunId: previousApproval.previewRunId,
+    });
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      revisionFeedbackHash,
+      revisionNumber,
+      revisionOfPreviewRunId: previousApproval.previewRunId,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      taskName: previousApproval.taskName,
+      workflow: "architect-review-revision",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    const approval = createArchitectBriefApproval({
+      brief: result.brief,
+      metadata: createArchitectBriefApprovalMetadata({
+        brief: result.brief,
+        productContext: result.productContext,
+        revisionFeedbackHash,
+        revisionNumber,
+        revisionOfPreviewRunId: previousApproval.previewRunId,
+      }),
+      previewRunId: run.runId,
+      secret: approvalSecret,
+      statusAfterWriteback: previousApproval.statusAfterWriteback,
+      taskId: result.pageId,
+      taskName: result.title,
+    });
+
+    return reply.send({
+      approval,
+      brief: result.brief,
+      briefGenerated: true,
+      dryRun: true,
+      ok: true,
+      ...(result.productContext ? { productContext: result.productContext } : {}),
+      revision: {
+        revisionFeedbackHash,
+        revisionNumber,
+        revisionOfPreviewRunId: previousApproval.previewRunId,
+      },
+      run,
+      statusUpdated: false,
       taskId: result.pageId,
     });
   });
@@ -460,6 +603,9 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
           dryRun: false,
           finishedAt: new Date(),
           reason: "Architect Brief already exists on task page.",
+          revisionFeedbackHash: approval.metadata.revisionFeedbackHash,
+          revisionNumber: approval.metadata.revisionNumber,
+          revisionOfPreviewRunId: approval.metadata.revisionOfPreviewRunId,
           runId,
           startedAt,
           taskId: approval.taskId,
@@ -479,6 +625,9 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
         dryRun: false,
         error: getErrorMessage(error),
         finishedAt: new Date(),
+        revisionFeedbackHash: approval.metadata.revisionFeedbackHash,
+        revisionNumber: approval.metadata.revisionNumber,
+        revisionOfPreviewRunId: approval.metadata.revisionOfPreviewRunId,
         runId,
         startedAt,
         taskId: approval.taskId,
@@ -496,6 +645,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
 
     const result = await options.approvedBriefWriter.writeApprovedBrief({
       brief: approval.brief,
+      metadata: approval.metadata,
       pageId: approval.taskId,
       statusAfterWriteback: approval.statusAfterWriteback,
       ...(approval.taskName ? { taskName: approval.taskName } : {}),
@@ -504,6 +654,9 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       dryRun: false,
       finishedAt: new Date(),
       result,
+      revisionFeedbackHash: approval.metadata.revisionFeedbackHash,
+      revisionNumber: approval.metadata.revisionNumber,
+      revisionOfPreviewRunId: approval.metadata.revisionOfPreviewRunId,
       runId,
       startedAt,
       taskId: approval.taskId,
@@ -523,8 +676,10 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     return reply.send({
       approval: {
         briefHash: approval.briefHash,
+        decisionStatus: approval.metadata.decisionStatus,
         expiresAt: approval.expiresAt,
         previewRunId: approval.previewRunId,
+        revisionNumber: approval.metadata.revisionNumber,
       },
       briefGenerated: true,
       dryRun: false,
