@@ -1,8 +1,13 @@
 # Implementation Desk v0
 
-The Implementation Desk is the first Agent Office layer after Architecture. It turns a Notion task that is already `Ready for Codex` into an implementation-ready Codex Handoff Brief for the Chief of Staff product repo.
+The Implementation Desk is the Agent Office layer after Architecture. It turns a Notion task that is already `Ready for Codex` into implementation-ready work for the Chief of Staff product repo.
 
-It does not create GitHub issues, branches, commits, pull requests, deployments, or Codex tasks yet. It prepares the exact handoff that a future GitHub/Codex integration can use after human approval.
+It now has two controlled stages:
+
+1. Generate and approve a Codex Handoff Brief.
+2. From that approved handoff, preview and approve a GitHub Draft PR Prep action.
+
+It still does not edit product code, merge, deploy, or change repository settings/secrets.
 
 ## Flow
 
@@ -13,7 +18,12 @@ Ready for Codex task
   -> human approves the signed preview
   -> append that exact handoff to the same Notion task page
   -> update Status to In Codex after successful append
-  -> record run summary
+  -> preview GitHub Draft PR Proposal
+  -> human approves the signed GitHub proposal
+  -> create agent-office/* branch in the product repo
+  -> commit .agent-office/handoffs/<notion-task-id>.md
+  -> open draft PR against main
+  -> append GitHub PR result to the Notion task
 ```
 
 ## Codex Handoff Brief Contents
@@ -36,23 +46,21 @@ The structured handoff includes:
 
 ## Approval Contract
 
-Preview responses include a signed approval token with a 120 minute expiry. The token embeds the exact structured `CodexHandoffBrief`, its hash, the target task page ID, target product repo, preview run ID, and optional status to apply after writeback.
+Preview responses include signed approval tokens with a 120 minute expiry.
 
-The approval endpoint requires both:
+Codex Handoff approval writes the exact handoff embedded in the token. It must not rerun the model or call OpenAI.
 
-- a valid `x-agent-office-api-key`
-- a valid, untampered, unexpired approval token
-
-Approval writes the exact handoff embedded in the token. It must not rerun the model or call OpenAI.
+GitHub Draft PR approval writes the exact GitHub proposal embedded in the token. It must not regenerate the proposal, change branch names, change file content, or alter PR text during execution.
 
 ## Notion Write Contract
 
-The Implementation Desk may only write to Notion during approved writeback:
+The Implementation Desk may write to Notion only after approved actions:
 
 1. Append `Codex Handoff Brief:` blocks to the same task page.
-2. Update Status to the configured `NOTION_STATUS_AFTER_CODEX_HANDOFF`, usually `In Codex`, only after the append succeeds.
+2. Update Status to the configured `NOTION_STATUS_AFTER_CODEX_HANDOFF`, usually `In Codex`, only after the handoff append succeeds.
+3. Append `GitHub Draft PR:` blocks with PR URL, branch, commit SHA, base branch, and handoff file path only after GitHub branch/commit/draft PR creation succeeds.
 
-If writeback fails, status must not advance. If the task page already contains a `Codex Handoff Brief:` marker, approved writeback is skipped to avoid duplicate handoffs.
+If writeback fails, status must not advance. If the task page already contains a `Codex Handoff Brief:` marker, approved handoff writeback is skipped to avoid duplicate handoffs.
 
 ## API Surface
 
@@ -60,19 +68,21 @@ If writeback fails, status must not advance. If the task page already contains a
 GET /agent-office/tasks/ready-for-codex
 POST /agent-office/codex-handoff
 POST /agent-office/codex-handoff/approve
+POST /agent-office/github/draft-pr
+POST /agent-office/github/draft-pr/approve
 ```
 
 All routes require `x-agent-office-api-key`.
 
 ## Operator Console
 
-`GET /office` now has two desk modes:
+`GET /office` has two desk modes:
 
 - Architecture Desk: `Ready for Architecture` -> Architect Brief -> `Ready for Codex`
-- Implementation Desk: `Ready for Codex` -> Codex Handoff Brief -> `In Codex`
+- Implementation Desk: `Ready for Codex` -> Codex Handoff Brief -> `In Codex` -> GitHub Draft PR Prep
 
-Both modes use the same preview -> approve -> exact writeback pattern.
+Both modes use preview -> approve -> exact execution.
 
 ## Next Extension
 
-The next PR can turn an approved Codex Handoff Brief into a GitHub issue, branch plan, or Codex implementation task. That future step should consume the reviewed handoff rather than regenerating it.
+The next implementation step can allow Codex to prepare a real code diff on an Agent Office branch, still using previewed diffs and approval gates before pushing commits.
