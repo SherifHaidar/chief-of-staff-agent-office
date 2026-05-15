@@ -22,6 +22,10 @@
       "destination": "/api/agent-office/architect-review"
     },
     {
+      "source": "/agent-office/architect-review/revise",
+      "destination": "/api/agent-office/architect-review/revise"
+    },
+    {
       "source": "/agent-office/architect-review/approve",
       "destination": "/api/agent-office/architect-review/approve"
     },
