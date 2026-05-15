@@ -6,8 +6,16 @@
       "destination": "/api/health"
     },
     {
-      "source": "/agent-office/:path*",
-      "destination": "/api/agent-office/:path*"
+      "source": "/agent-office/tasks/ready-for-architecture",
+      "destination": "/api/agent-office/tasks/ready-for-architecture"
+    },
+    {
+      "source": "/agent-office/architect-review",
+      "destination": "/api/agent-office/architect-review"
+    },
+    {
+      "source": "/agent-office/run-ready-architecture",
+      "destination": "/api/agent-office/run-ready-architecture"
     }
   ]
 }
