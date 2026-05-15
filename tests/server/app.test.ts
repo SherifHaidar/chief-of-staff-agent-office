@@ -9,7 +9,7 @@ import {
   type ArchitectReviewWorkflow,
   type ReadyArchitectureTaskScanner,
 } from "../../src/server/app.js";
-import type { WorkflowResult } from "../../src/workflows/workflow-result.js";
+import type { WorkflowResult, WorkflowSuccess } from "../../src/workflows/workflow-result.js";
 
 const apiKey = "test-agent-office-key";
 const approvalSecret = "test-approval-secret";
@@ -40,7 +40,7 @@ const revisedBrief: ArchitectBrief = {
   executiveSummary: "Expose the workflow through the API with a tighter approval path.",
 };
 
-function workflowSuccess(dryRun: boolean): WorkflowResult {
+function workflowSuccess(dryRun: boolean): WorkflowSuccess {
   return {
     brief,
     dryRun,
