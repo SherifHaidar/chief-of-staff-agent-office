@@ -18,6 +18,7 @@ const optionalNonEmptyString = z.preprocess((value) => {
 
 export const AppEnvSchema = z.object({
   AGENT_OFFICE_API_KEY: optionalNonEmptyString,
+  AGENT_OFFICE_APPROVAL_SECRET: optionalNonEmptyString,
   DRY_RUN: stringBoolean.default(false),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   NOTION_MAX_READ_DEPTH: z.coerce.number().int().min(0).max(10).default(3),
