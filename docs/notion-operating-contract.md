@@ -6,10 +6,10 @@ This document defines the Notion-side operating contract for the Agent Office. N
 
 There are two separate systems:
 
-- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`. The Agent Office must not clone, modify, merge, or deploy this repo until a future reviewed workflow explicitly adds that capability.
-- Agent Office / orchestrator repo: `SherifHaidar/chief-of-staff-agent-office`. This repo owns orchestration, Notion task reading/writeback, agent workflow execution, API endpoints, approval tokens, and run summaries.
+- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`, currently `SherifHaidar/personal-chief-of-staff`. The Agent Office may create approved Agent Office branches and draft PR prep artifacts in this repo, but must not merge, deploy, push to `main`, edit product code autonomously, or change settings/secrets.
+- Agent Office / orchestrator repo: `SherifHaidar/chief-of-staff-agent-office`. This repo owns orchestration, Notion task reading/writeback, agent workflow execution, API endpoints, approval tokens, GitHub App integration, and run summaries.
 
-The Agent Office is not product code. It is the controlled office layer around future product work.
+The Agent Office is not product code. It is the controlled office layer around product work.
 
 ## AI Build Tasks Role
 
@@ -47,7 +47,7 @@ The database should hold task intent, priority, agent assignment, acceptance cri
 | `Draft` | Idea or rough task. Not ready for agent processing. |
 | `Ready for Architecture` | Sherif has shaped the task enough for Architect review. |
 | `Ready for Codex` | Architect Brief has been written back successfully and the task is ready for Implementation Desk handoff. |
-| `In Codex` | Implementation work is active or ready to be handed to Codex/GitHub tooling. |
+| `In Codex` | Implementation work is active or ready to be handed to Codex/GitHub tooling. GitHub Draft PR Prep may occur here. |
 | `Ready for Claude Review` | Implementation exists and is ready for external/code review. |
 | `Ready for Human Test` | Review passed or was addressed, and Sherif should test behavior. |
 | `Approved` | Sherif approved the result. |
@@ -96,13 +96,24 @@ The dashboard should stay human-readable and operational. It should not become t
 5. Update `Status` to `In Codex` only after the append succeeds, when `NOTION_STATUS_AFTER_CODEX_HANDOFF` is configured.
 6. Return and record a structured run summary.
 
+### GitHub Draft PR Prep
+
+1. Require an approved Codex Handoff Brief marker on the task page.
+2. Generate a GitHub Draft PR Proposal from the exact approved handoff token.
+3. On approval, create an allowlisted `agent-office/*` or `codex/*` branch in the product repo.
+4. Commit `.agent-office/handoffs/<notion-task-id>.md` to that branch.
+5. Open a draft PR against the configured base branch, usually `main`.
+6. Append `GitHub Draft PR:` blocks to the same Notion task page with PR URL, branch, base commit, commit SHA, and handoff file path.
+7. Do not update task status automatically after draft PR prep.
+
 Required safety rules:
 
-- Preview/dry-run mode must not write to Notion.
-- Approval must write the exact signed preview payload and must not rerun the model.
+- Preview/dry-run mode must not write to Notion or GitHub.
+- Approval must write or execute the exact signed preview payload and must not rerun or regenerate it.
 - Failed runs must not update status.
 - Status must not advance if append fails.
-- Agent code should not perform unrelated Notion writes.
+- GitHub writes must be repo-allowlisted and branch-prefix guarded.
+- The Agent Office must not push to `main`, merge, deploy, change settings, or change secrets.
 - Workflow/application code owns side effects.
 
 ## API Security Contract
@@ -110,7 +121,7 @@ Required safety rules:
 - `GET /health` may remain public, but it must stay generic.
 - `GET /office` may remain public as a shell, but it must not embed secrets or task data.
 - Every `/agent-office/*` endpoint must require `x-agent-office-api-key`.
-- Missing or invalid keys must return `401` without running scanner, workflow, or Notion write logic.
+- Missing or invalid keys must return `401` without running scanner, workflow, Notion, or GitHub write logic.
 - Approval endpoints must also require a valid signed approval token.
 
 ## Duplicate-Processing Policy
@@ -122,13 +133,13 @@ Secondary guard: page markers. Before approved writeback, the Agent Office check
 - `Architect Brief:`
 - `Codex Handoff Brief:`
 
-If the relevant marker already exists, writeback is skipped.
+GitHub Draft PR Prep also checks for duplicate branch/PR before creating a new branch.
 
 Future guard: explicit run metadata. Stronger fields such as `Last Architect Brief At`, `Last Agent Run At`, or `Agent Run ID` can make duplicate handling more reliable later.
 
 ## Manual Responsibilities
 
-These stay manual in Notion for now:
+These stay manual in Notion/GitHub for now:
 
 - Create tasks and shape the problem statement.
 - Set priority.
@@ -137,6 +148,7 @@ These stay manual in Notion for now:
 - Maintain `Do Not Change` constraints.
 - Park, unpark, or defer tasks.
 - Approve architecture-sensitive changes.
+- Review draft PRs.
 - Approve merges, deployments, and final product decisions.
 
 Sherif remains the final approver for important writes, merges, deployments, core architecture changes, and sensitive product behavior.
@@ -153,9 +165,10 @@ The Agent Office currently supports:
 - Running the Implementation Desk / Codex Handoff workflow.
 - Appending approved Codex Handoff Briefs back to the same task page.
 - Moving successfully processed handoffs to `In Codex`.
+- Creating approved GitHub Draft PR Prep branches and draft PRs with handoff files.
 - Producing structured API responses and local run summaries.
 
-Future integrations should continue to call workflow/application services instead of duplicating Notion write logic in route handlers or agents.
+Future integrations should continue to call workflow/application services instead of duplicating Notion or GitHub write logic in route handlers or agents.
 
 ## Optional Future Notion Fields
 

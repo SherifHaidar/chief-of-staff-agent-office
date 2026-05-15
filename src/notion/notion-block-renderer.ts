@@ -1,5 +1,6 @@
 import type { ArchitectBrief } from "../domain/architect-brief.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { NotionAppendBlock } from "./notion-types.js";
 
 const MAX_TEXT_LENGTH = 1_900;
@@ -104,6 +105,29 @@ export function renderCodexHandoffBriefBlocks(brief: CodexHandoffBrief, generate
     heading(3, "Suggested PR Body"),
     ...paragraph(brief.suggestedPrBody),
     ...listSection("Merge / Deploy Approval Warnings", brief.explicitApprovalWarnings),
+  ];
+}
+
+export function renderGitHubDraftPrResultBlocks(
+  result: GitHubDraftPrExecutionResult,
+  generatedAt: Date,
+): NotionAppendBlock[] {
+  return [
+    { type: "divider", divider: {} },
+    heading(2, `GitHub Draft PR: #${result.pullRequestNumber}`),
+    ...paragraph(`Created by chief-of-staff-agent-office at ${generatedAt.toISOString()}.`),
+    heading(3, "Pull Request"),
+    ...paragraph(result.pullRequestUrl),
+    heading(3, "Repository"),
+    ...paragraph(result.repository),
+    heading(3, "Branch"),
+    ...paragraph(`${result.branchName} from ${result.baseBranch} @ ${result.baseCommitSha}`),
+    heading(3, "Commit"),
+    ...paragraph(result.commitSha),
+    heading(3, "Handoff File"),
+    ...paragraph(result.handoffFilePath),
+    heading(3, "Approval Boundary"),
+    ...paragraph("Draft only. Not merged, not deployed, and not approved for production. Sherif must review before merge or deployment."),
   ];
 }
 

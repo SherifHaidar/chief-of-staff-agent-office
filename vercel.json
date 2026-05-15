@@ -34,6 +34,14 @@
       "destination": "/api/agent-office/codex-handoff/approve"
     },
     {
+      "source": "/agent-office/github/draft-pr",
+      "destination": "/api/agent-office/github/draft-pr"
+    },
+    {
+      "source": "/agent-office/github/draft-pr/approve",
+      "destination": "/api/agent-office/github/draft-pr/approve"
+    },
+    {
       "source": "/agent-office/run-ready-architecture",
       "destination": "/api/agent-office/run-ready-architecture"
     }

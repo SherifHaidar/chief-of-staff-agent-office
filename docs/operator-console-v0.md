@@ -15,7 +15,7 @@ The page is public as a shell. It does not embed secrets or task data. Every ope
 The console supports two desk modes:
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, approve exact writeback, then move Status to `Ready for Codex`.
-- Implementation Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then move Status to `In Codex` when configured.
+- Implementation Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then optionally preview and approve GitHub Draft PR Prep.
 
 ## Architecture Flow
 
@@ -38,20 +38,24 @@ List Ready for Codex tasks
   -> approve signed preview token
   -> append exact approved handoff to Notion
   -> update Status to In Codex
-  -> record run summary
+  -> preview GitHub Draft PR Proposal
+  -> review exact branch/file/PR proposal
+  -> approve signed GitHub proposal token
+  -> create branch, commit handoff file, open draft PR
+  -> append GitHub result to Notion
 ```
 
 ## Approval Token Contract
 
 Preview responses include a signed approval token with a 120 minute expiry. The token contains:
 
-- action, such as `architect-brief-writeback` or `codex-handoff-writeback`
+- action, such as `architect-brief-writeback`, `codex-handoff-writeback`, or `github-draft-pr-create`
 - task page ID
 - optional task name
 - exact structured preview payload
 - payload hash
 - preview run ID
-- target status after writeback
+- target status or GitHub write metadata
 - created and expiry timestamps
 
 The approval endpoint requires both:
@@ -59,7 +63,7 @@ The approval endpoint requires both:
 - a valid `x-agent-office-api-key`
 - a valid, untampered, unexpired approval token
 
-Approval writes the exact payload embedded in the token. It must not rerun the Architect Agent, rerun the Codex Handoff Agent, or call OpenAI.
+Approval writes or executes the exact payload embedded in the token. It must not rerun the Architect Agent, rerun the Codex Handoff Agent, call OpenAI, or regenerate GitHub proposal content.
 
 ## Duplicate Guard
 
@@ -68,14 +72,13 @@ Before approved writeback, the API checks the task page for the relevant marker:
 - `Architect Brief:` for Architecture Desk
 - `Codex Handoff Brief:` for Implementation Desk
 
-If the marker is present, the writeback is skipped and a skipped run summary is recorded.
+For GitHub Draft PR Prep, the GitHub service checks for duplicate branch/PR before creating the branch.
 
 ## Future Reuse
 
 The same preview -> approve -> execute shape should be reused for future office actions:
 
-- GitHub issue creation from an approved handoff
-- Codex implementation task creation
+- Codex implementation diff creation
 - Claude review request
 - deployment approval
 - release note writeback

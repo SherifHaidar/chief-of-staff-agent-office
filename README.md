@@ -2,7 +2,7 @@
 
 Standalone AI Development Office Orchestrator for the personal Chief of Staff product.
 
-This repository owns orchestration only. It does not clone, modify, merge, or deploy product code. It coordinates controlled office workflows around Notion tasks, previews proposed agent outputs, and writes back only after explicit approval.
+This repository owns orchestration only. It coordinates controlled office workflows around Notion tasks, previews proposed agent/GitHub actions, and executes only after explicit approval.
 
 ## Current Workflows
 
@@ -22,6 +22,16 @@ Ready for Codex task
   -> Status: In Codex
 ```
 
+```text
+Approved Codex Handoff Brief
+  -> GitHub Draft PR Proposal preview
+  -> signed approval
+  -> create agent-office/* branch in product repo
+  -> commit .agent-office/handoffs/<notion-task-id>.md
+  -> open draft PR against main
+  -> append PR link/branch/commit back to Notion
+```
+
 The longer-term goal is an AI Development Office that can coordinate architecture, implementation planning, review, QA, release notes, GitHub/Vercel coordination, and human approval gates.
 
 ## Docs
@@ -29,6 +39,7 @@ The longer-term goal is an AI Development Office that can coordinate architectur
 - [Notion Operating Contract](docs/notion-operating-contract.md)
 - [Operator Console v0](docs/operator-console-v0.md)
 - [Implementation Desk v0](docs/implementation-desk-v0.md)
+- [GitHub Draft PR Prep v0](docs/github-draft-pr-prep-v0.md)
 
 ## Quick Start
 
@@ -63,9 +74,9 @@ Open:
 The page is public as a shell, but every `/agent-office/*` request it makes requires `x-agent-office-api-key`. It supports:
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
-- Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback.
+- Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep.
 
-Approval tokens expire after 120 minutes. Approval endpoints write the exact previewed payload embedded in the signed token and do not rerun the model.
+Approval tokens expire after 120 minutes. Approval endpoints write or execute the exact previewed payload embedded in the signed token and do not rerun the model or regenerate GitHub proposal content.
 
 ## HTTP API
 
@@ -131,6 +142,24 @@ curl -X POST http://127.0.0.1:3000/agent-office/codex-handoff/approve \
   -d '{"approvalToken":"<approval-token-from-preview>"}'
 ```
 
+Preview GitHub Draft PR Prep from the approved Codex Handoff token:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/github/draft-pr \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"codexHandoffApprovalToken":"<codex-handoff-approval-token>"}'
+```
+
+Approve exact GitHub Draft PR creation:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/github/draft-pr/approve \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"approvalToken":"<github-draft-pr-approval-token>"}'
+```
+
 Batch dry-run architecture-ready tasks:
 
 ```bash
@@ -150,6 +179,15 @@ Required for live API use:
 - `AGENT_OFFICE_API_KEY`
 - `AGENT_OFFICE_APPROVAL_SECRET`
 
+Required for GitHub Draft PR Prep:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_INSTALLATION_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_ALLOWED_REPOS=SherifHaidar/personal-chief-of-staff`
+- `GITHUB_ALLOWED_BRANCH_PREFIXES=agent-office/,codex/`
+- `GITHUB_DEFAULT_BASE_BRANCH=main`
+
 Recommended explicit configuration:
 
 - `OPENAI_MODEL=gpt-5.4`
@@ -159,10 +197,12 @@ Recommended explicit configuration:
 - `NOTION_READY_FOR_CODEX_STATUS=Ready for Codex`
 - `NOTION_STATUS_AFTER_ARCHITECT=Ready for Codex`
 - `NOTION_STATUS_AFTER_CODEX_HANDOFF=In Codex`
-- `TARGET_PRODUCT_REPO=<owner/product-repo>`
+- `TARGET_PRODUCT_REPO=SherifHaidar/personal-chief-of-staff`
 - `RUN_LOG_PATH=data/run-log.jsonl`
 
 Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. The approval secret signs short-lived approval tokens and should be different from the API key.
+
+The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, and `Pull requests: read/write`. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
 
 The Notion integration must be able to read the AI Build Tasks database, read task page content, append blocks to task pages, and update the configured status property.
 
@@ -180,8 +220,6 @@ On Vercel, the adapter defaults `RUN_LOG_PATH` to `/tmp/agent-office-run-log.jso
 
 ## Safety Model
 
-Agents do not receive tools that mutate external systems. They only return structured outputs. The TypeScript workflow layer owns side effects and performs Notion writes in a fixed order.
+Agents do not receive tools that mutate external systems. They only return structured outputs. The TypeScript workflow layer owns side effects and performs Notion/GitHub writes in a fixed order.
 
-Dry-run and preview steps do not write to Notion. Approved writeback appends to the same task page first and updates status only after append succeeds. Duplicate guards check for existing `Architect Brief:` and `Codex Handoff Brief:` markers before approved writeback.
-
-GitHub issues, branches, PRs, Codex implementation tasks, Claude review, merge, and deployment automation are intentionally out of scope until a future approved workflow adds them.
+Dry-run and preview steps do not write to Notion or GitHub. Approved Notion writeback appends to the same task page first and updates status only after append succeeds. Approved GitHub Draft PR Prep creates only an allowlisted branch, one handoff file commit, and a draft PR. It does not edit product code, push to main, merge, deploy, or change repository settings/secrets.
