@@ -72,6 +72,10 @@ function createWorkflow(dryRun = false) {
   };
   const architect = {
     createBrief: vi.fn().mockResolvedValue(brief),
+    reviseBrief: vi.fn().mockResolvedValue({
+      ...brief,
+      briefTitle: "Orchestrator v0 revision",
+    }),
   };
   const productContextProvider = {
     build: vi.fn().mockResolvedValue(productContext),
@@ -107,5 +111,29 @@ describe("ArchitectTaskWorkflow", () => {
     expect(architect.createBrief).toHaveBeenCalledWith(task, { productContext });
     expect(repository.appendArchitectBrief).toHaveBeenCalledWith(pageId, brief, new Date("2026-05-14T12:00:00.000Z"));
     expect(repository.markArchitectBriefReady).toHaveBeenCalledWith(pageId, "Architect Brief Ready");
+  });
+
+  it("revises a preview with task context, product context, previous brief, and feedback", async () => {
+    const { architect, repository, workflow } = createWorkflow();
+    const result = await workflow.revise({
+      pageId,
+      previousBrief: brief,
+      revisionFeedback: "Tighten scope and call out context gaps.",
+      revisionFeedbackHash: "feedback-hash",
+      revisionNumber: 2,
+      revisionOfPreviewRunId: "run_v1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(architect.reviseBrief).toHaveBeenCalledWith(task, {
+      previousBrief: brief,
+      productContext,
+      revisionFeedback: "Tighten scope and call out context gaps.",
+      revisionNumber: 2,
+    });
+    expect(result.ok ? result.revisionNumber : undefined).toBe(2);
+    expect(result.ok ? result.revisionFeedbackHash : undefined).toBe("feedback-hash");
+    expect(repository.appendArchitectBrief).not.toHaveBeenCalled();
+    expect(repository.markArchitectBriefReady).not.toHaveBeenCalled();
   });
 });
