@@ -1,9 +1,10 @@
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
+import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
-import { chunkBlocks, renderArchitectBriefBlocks } from "./notion-block-renderer.js";
-import type { NotionAppendBlock, NotionClientLike, NotionTaskRepositoryConfig } from "./notion-types.js";
+import { chunkBlocks, renderArchitectBriefBlocks, renderCodexHandoffBriefBlocks } from "./notion-block-renderer.js";
+import type { NotionClientLike, NotionTaskRepositoryConfig } from "./notion-types.js";
 
 type ListBlocksResponse = {
   has_more?: boolean;
@@ -137,7 +138,7 @@ export class NotionTaskRepository {
     };
   }
 
-  async findReadyForArchitectureTasks(input: { databaseId: string; statusName: string }): Promise<ReadyArchitectureTask[]> {
+  async findTasksByStatus(input: { databaseId: string; statusName: string }): Promise<ReadyArchitectureTask[]> {
     const tasks: ReadyArchitectureTask[] = [];
     let cursor: string | undefined;
 
@@ -177,10 +178,20 @@ export class NotionTaskRepository {
     return tasks;
   }
 
+  async findReadyForArchitectureTasks(input: { databaseId: string; statusName: string }): Promise<ReadyArchitectureTask[]> {
+    return this.findTasksByStatus(input);
+  }
+
   async hasArchitectBrief(pageId: string): Promise<boolean> {
     const task = await this.fetchTask(pageId);
 
     return task.contentMarkdown.includes("Architect Brief:");
+  }
+
+  async hasCodexHandoffBrief(pageId: string): Promise<boolean> {
+    const task = await this.fetchTask(pageId);
+
+    return task.contentMarkdown.includes("Codex Handoff Brief:");
   }
 
   async appendArchitectBrief(pageId: string, brief: ArchitectBrief, generatedAt: Date): Promise<void> {
@@ -195,7 +206,27 @@ export class NotionTaskRepository {
     }
   }
 
+  async appendCodexHandoffBrief(pageId: string, brief: CodexHandoffBrief, generatedAt: Date): Promise<void> {
+    const normalizedPageId = normalizeNotionPageId(pageId);
+    const blocks = renderCodexHandoffBriefBlocks(brief, generatedAt);
+
+    for (const chunk of chunkBlocks(blocks)) {
+      await this.client.blocks.children.append({
+        block_id: normalizedPageId,
+        children: chunk,
+      });
+    }
+  }
+
   async markArchitectBriefReady(pageId: string, statusName: string): Promise<void> {
+    await this.updateStatus(pageId, statusName);
+  }
+
+  async markCodexHandoffReady(pageId: string, statusName: string): Promise<void> {
+    await this.updateStatus(pageId, statusName);
+  }
+
+  private async updateStatus(pageId: string, statusName: string): Promise<void> {
     const normalizedPageId = normalizeNotionPageId(pageId);
     const propertyValue =
       this.config.statusPropertyType === "select"
