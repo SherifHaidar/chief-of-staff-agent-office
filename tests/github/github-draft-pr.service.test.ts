@@ -39,9 +39,9 @@ describe("GitHubDraftPrService", () => {
   it("creates a safe draft PR proposal from an approved Codex handoff", async () => {
     const request = vi
       .fn()
-      .mockResolvedValueOnce({ object: { sha: "base-sha" } })
       .mockRejectedValueOnce(new GitHubApiError("Not Found", 404))
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ object: { sha: "base-sha" } });
     const service = new GitHubDraftPrService(createClient(request), {
       allowedBranchPrefixes: ["agent-office/", "codex/"],
       allowedRepositories: ["SherifHaidar/personal-chief-of-staff"],
@@ -84,10 +84,7 @@ describe("GitHubDraftPrService", () => {
   });
 
   it("rejects duplicate branches before writing", async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce({ object: { sha: "base-sha" } })
-      .mockResolvedValueOnce({ object: { sha: "existing-branch-sha" } });
+    const request = vi.fn().mockResolvedValueOnce({ object: { sha: "existing-branch-sha" } });
     const service = new GitHubDraftPrService(createClient(request), {
       allowedBranchPrefixes: ["agent-office/"],
       allowedRepositories: ["SherifHaidar/personal-chief-of-staff"],
