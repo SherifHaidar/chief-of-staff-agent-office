@@ -5,17 +5,22 @@ import { createNotionClient } from "./notion/notion.client.js";
 import { NotionTaskRepository } from "./notion/notion-task.repository.js";
 import { consoleLogger } from "./utils/logger.js";
 import { ArchitectTaskWorkflow } from "./workflows/architect-task.workflow.js";
+import { CodexHandoffWorkflow } from "./workflows/codex-handoff.workflow.js";
 
 export * from "./agents/architect.agent.js";
+export * from "./agents/codex-handoff.agent.js";
 export * from "./approval/architect-brief-approval.js";
+export * from "./approval/codex-handoff-approval.js";
 export * from "./audit/run-log.js";
 export * from "./audit/run-summary.js";
 export * from "./config/env.js";
 export * from "./domain/ai-build-task.js";
 export * from "./domain/architect-brief.js";
+export * from "./domain/codex-handoff-brief.js";
 export * from "./domain/ready-architecture-task.js";
 export * from "./notion/notion-task.repository.js";
 export * from "./workflows/architect-task.workflow.js";
+export * from "./workflows/codex-handoff.workflow.js";
 export * from "./workflows/workflow-result.js";
 
 export function createNotionTaskRepository(env: AppEnv): NotionTaskRepository {
@@ -41,6 +46,19 @@ export function createArchitectTaskWorkflow(env: AppEnv): ArchitectTaskWorkflow 
   });
 }
 
+export function createCodexHandoffWorkflow(env: AppEnv): CodexHandoffWorkflow {
+  process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
+
+  const taskRepository = createNotionTaskRepository(env);
+  const agents = createAgentRegistry({ model: env.OPENAI_MODEL });
+
+  return new CodexHandoffWorkflow({
+    codexHandoff: agents.codexHandoff,
+    logger: consoleLogger,
+    taskRepository,
+  });
+}
+
 export async function runArchitectTask(input: { pageId: string; dryRun?: boolean }, env = loadEnv()) {
   const workflow = createArchitectTaskWorkflow(env);
 
@@ -48,5 +66,16 @@ export async function runArchitectTask(input: { pageId: string; dryRun?: boolean
     dryRun: input.dryRun ?? env.DRY_RUN,
     pageId: input.pageId,
     statusAfterWriteback: env.NOTION_STATUS_AFTER_ARCHITECT,
+  });
+}
+
+export async function runCodexHandoff(input: { pageId: string; dryRun?: boolean }, env = loadEnv()) {
+  const workflow = createCodexHandoffWorkflow(env);
+
+  return workflow.run({
+    dryRun: input.dryRun ?? true,
+    pageId: input.pageId,
+    statusAfterWriteback: env.NOTION_STATUS_AFTER_CODEX_HANDOFF,
+    targetProductRepo: env.TARGET_PRODUCT_REPO,
   });
 }
