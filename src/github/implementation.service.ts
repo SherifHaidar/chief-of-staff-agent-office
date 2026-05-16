@@ -233,7 +233,7 @@ export class ImplementationService {
       baseBranch: input.shell.baseBranch,
       baseCommitSha: input.shell.baseCommitSha,
       branchName: input.shell.branchName,
-      draft: true,
+      draft: true as const,
       prTitle: normalizePrTitle(input.proposal.prTitle),
       repository: input.shell.repository,
       taskId: input.shell.taskId,
