@@ -6,7 +6,7 @@ This document defines the Notion-side operating contract for the Agent Office. N
 
 There are two separate systems:
 
-- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`, currently `SherifHaidar/personal-chief-of-staff`. The Agent Office may create approved Agent Office branches, draft PR prep artifacts, and separately approved implementation draft PRs in this repo, but must not merge, deploy, push to `main`, edit product code without a signed implementation proposal approval, or change settings/secrets.
+- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`, currently `SherifHaidar/personal-chief-of-staff`. The Agent Office may create approved Agent Office branches, draft PR prep artifacts, and separately approved implementation-pending work-order PRs in this repo, but must not merge, deploy, push to `main`, edit product application files, or change settings/secrets.
 - Agent Office / orchestrator repo: `SherifHaidar/chief-of-staff-agent-office`. This repo owns orchestration, Notion task reading/writeback, agent workflow execution, API endpoints, approval tokens, GitHub App integration, and run summaries.
 
 The Agent Office is not product code. It is the controlled office layer around product work.
@@ -113,14 +113,15 @@ The dashboard should stay human-readable and operational. It should not become t
 1. Read implementation-ready tasks where `Status = In Codex`.
 2. Require an approved Codex Handoff Brief marker on the task page.
 3. Load the persisted Codex Handoff Brief from the Notion writeback as a v0 resume/recovery path.
-4. Generate a Controlled Implementation Proposal from the task, approved handoff content, Product Context Pack, and task page content.
-5. Preview exact proposed file paths, replacement contents, PR text, and task-specific verification plan.
-6. Require separate signed implementation approval before writing product code.
+4. Generate a deterministic implementation work-order proposal from the task and approved handoff.
+5. Preview exact repository, branch, base SHA, PR title/body, work-order path/content, task ID, and handoff summary.
+6. Require separate signed work-order approval before writing to GitHub.
 7. On approval, create or update an allowlisted implementation branch and draft PR.
-8. Commit only the exact approved file changes.
-9. Capture available GitHub check/status evidence.
-10. Append `Controlled Implementation Draft PR:` blocks to the same Notion task page with PR URL, branch, commit SHA, files changed, verification plan, evidence, and gaps.
-11. Do not update task status automatically after implementation PR creation in v0.
+8. Commit only `.agent-office/work-orders/<notion-task-id>.md`.
+9. Capture available GitHub check/status evidence for the work-order commit.
+10. Append `Implementation Work-Order Draft PR:` blocks to the same Notion task page with PR URL, branch, commit SHA, work-order path, approved handoff summary, and next Codex action.
+11. Do not update task status automatically after work-order PR creation in v0.
+12. Codex implements the product change later on the created branch/checkout, then reports tests and evidence for review.
 
 Required safety rules:
 
@@ -130,7 +131,7 @@ Required safety rules:
 - Status must not advance if append fails.
 - GitHub writes must be repo-allowlisted and branch-prefix guarded.
 - The Agent Office must not push to `main`, merge, deploy, change settings, or change secrets.
-- Product code writes require their own implementation approval token. Architect Brief and Codex Handoff approvals are not coding approvals.
+- Product code writes happen after the work-order PR, on the real product branch/checkout. Architect Brief, Codex Handoff, and work-order PR approvals are not final implementation, merge, or deployment approvals.
 - Workflow/application code owns side effects.
 
 ## API Security Contract
@@ -186,8 +187,8 @@ The Agent Office currently supports:
 - Scanning implementation-ready `In Codex` tasks that already contain an approved Codex Handoff Brief marker.
 - Resuming Controlled Implementation previews from the persisted Notion Codex Handoff Brief.
 - Creating approved GitHub Draft PR Prep branches and draft PRs with handoff files.
-- Creating separately approved implementation branches and draft PRs with exact approved product file changes.
-- Capturing task-specific verification plans and available GitHub check evidence for implementation PRs.
+- Creating separately approved implementation-pending branches and draft PRs with exact approved work-order files.
+- Capturing the next Codex action and available GitHub check evidence for work-order PRs.
 - Producing structured API responses and local run summaries.
 
 Future integrations should continue to call workflow/application services instead of duplicating Notion or GitHub write logic in route handlers or agents.

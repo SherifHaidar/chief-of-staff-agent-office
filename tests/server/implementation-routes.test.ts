@@ -5,6 +5,7 @@ import { InMemoryRunLog } from "../../src/audit/run-log.js";
 import type { ArchitectBrief } from "../../src/domain/architect-brief.js";
 import type { CodexHandoffBrief } from "../../src/domain/codex-handoff-brief.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../../src/domain/implementation-proposal.js";
+import { IMPLEMENTATION_PENDING_NOTICE } from "../../src/domain/implementation-proposal.js";
 import {
   createAgentOfficeApp,
   type ApprovedImplementationWriter,
@@ -56,56 +57,50 @@ const handoff: CodexHandoffBrief = {
 };
 
 const proposal: ImplementationProposal = {
-  approvalWarnings: ["Draft only. Merge and deployment require Sherif approval."],
+  approvalWarnings: [
+    "Implementation pending. This draft PR is a starting point for Codex implementation, not the final deliverable.",
+    "Agent Office will commit only the work-order file. Product code changes must happen later on this branch.",
+    "Merge and deployment require separate final human approval.",
+  ],
   baseBranch: "main",
   baseCommitSha: "base-sha",
   branchName: "agent-office/impl-improve-task-capture-22222222",
-  changedFiles: [
-    {
-      action: "update",
-      content: "export const captureEnabled = true;\n",
-      path: "lib/capture.ts",
-      summary: "Enable the safer capture path.",
-    },
-  ],
-  commitMessage: "Implement safer capture path",
-  contextGaps: [],
+  commitMessage: "Add implementation work order for Improve task capture",
   draft: true,
-  implementationSummary: "Update the capture helper.",
-  prBody: "## Summary\n- Update capture helper",
-  prTitle: "[Draft] Improve task capture",
+  handoffSummary: {
+    acceptanceChecklist: ["Task capture improvement is visible."],
+    constraints: ["Do not merge or deploy without approval."],
+    implementationScope: ["Prepare implementation work."],
+    implementationSteps: ["Inspect code", "Implement", "Test"],
+    likelyAffectedFiles: ["lib/capture.ts"],
+    problemSummary: "Task capture needs improvement.",
+    productIntent: "Make capture smoother.",
+    suggestedBranchName: "codex/improve-task-capture",
+    suggestedPrTitle: "Improve task capture",
+    testsToRun: ["npm test"],
+  },
+  nextAction: "Codex must implement on this branch, run relevant tests, and return evidence before human merge or deploy approval.",
+  prBody: `${IMPLEMENTATION_PENDING_NOTICE}\n\nWork order only.`,
+  prTitle: "[Draft] Implementation pending: Improve task capture",
   repository: targetProductRepo,
   taskId: pageId,
   taskName: "Improve task capture",
-  verificationPlan: {
-    acceptanceCriteria: ["Capture still succeeds."],
-    automatedChecks: ["npm test"],
-    evidenceToCollect: ["GitHub checks"],
-    manualChecks: ["Submit a test capture."],
-    regressionRisks: ["Capture API regression."],
-  },
+  workOrderContent: `${IMPLEMENTATION_PENDING_NOTICE}\n\n# Work order\nCodex must implement next.`,
+  workOrderPath: ".agent-office/work-orders/22222222-2222-2222-2222-222222222222.md",
 };
 
 const githubResult: ImplementationExecutionResult = {
   baseBranch: "main",
   baseCommitSha: "base-sha",
   branchName: proposal.branchName,
-  changedFiles: proposal.changedFiles.map((change) => ({
-    action: change.action,
-    path: change.path,
-    summary: change.summary,
-  })),
   checks: [{ conclusion: "success", name: "CI", status: "completed" }],
   commitSha: "commit-sha",
   draft: true,
-  evidence: {
-    automatedChecksSummary: "GitHub checks reported no failing conclusions at capture time.",
-    evidence: ["CI: success"],
-    verificationGaps: [],
-  },
+  nextAction: proposal.nextAction,
   pullRequestNumber: 55,
   pullRequestUrl: "https://github.com/SherifHaidar/personal-chief-of-staff/pull/55",
   repository: targetProductRepo,
+  workOrderPath: proposal.workOrderPath,
 };
 
 function architectSuccess(): WorkflowResult {
@@ -250,7 +245,7 @@ describe("Controlled Implementation API", () => {
     await app.close();
   });
 
-  it("previews an exact implementation proposal after Codex Handoff writeback", async () => {
+  it("previews an exact implementation work order after Codex Handoff writeback", async () => {
     const implementationWorkflow = createImplementationWorkflow(previewSuccess());
     const readyCodexScanner = createReadyCodexScanner(true);
     const runLog = new InMemoryRunLog();
@@ -282,7 +277,7 @@ describe("Controlled Implementation API", () => {
         token: expect.any(String),
       },
       dryRun: true,
-      implementationProposalGenerated: true,
+      implementationWorkOrderGenerated: true,
       ok: true,
       proposal,
       run: {
@@ -303,7 +298,7 @@ describe("Controlled Implementation API", () => {
     await app.close();
   });
 
-  it("previews controlled implementation from a persisted In Codex handoff without a handoff token", async () => {
+  it("previews a work order from a persisted In Codex handoff without a handoff token", async () => {
     const implementationWorkflow = createImplementationWorkflow(previewSuccess());
     const implementationReadyScanner = createImplementationReadyScanner();
     const runLog = new InMemoryRunLog();
@@ -335,7 +330,7 @@ describe("Controlled Implementation API", () => {
         token: expect.any(String),
       },
       dryRun: true,
-      implementationProposalGenerated: true,
+      implementationWorkOrderGenerated: true,
       ok: true,
       proposal,
       run: {
@@ -354,7 +349,7 @@ describe("Controlled Implementation API", () => {
     await app.close();
   });
 
-  it("requires an approved Codex Handoff marker before previewing implementation writes", async () => {
+  it("requires an approved Codex Handoff marker before previewing implementation work orders", async () => {
     const implementationWorkflow = createImplementationWorkflow(previewSuccess());
     const readyCodexScanner = createReadyCodexScanner(false);
     const runLog = new InMemoryRunLog();
@@ -388,7 +383,7 @@ describe("Controlled Implementation API", () => {
     await app.close();
   });
 
-  it("approves the exact implementation proposal without regenerating it", async () => {
+  it("approves the exact implementation work order without regenerating it", async () => {
     const implementationWorkflow = createImplementationWorkflow(previewSuccess());
     const implementationWriter = createImplementationWriter(executionSuccess());
     const runLog = new InMemoryRunLog();
@@ -421,7 +416,7 @@ describe("Controlled Implementation API", () => {
       },
       dryRun: false,
       github: githubResult,
-      implementationCreated: true,
+      implementationWorkOrderPrCreated: true,
       ok: true,
       run: {
         briefGenerated: true,

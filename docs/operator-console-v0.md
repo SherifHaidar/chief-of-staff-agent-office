@@ -16,7 +16,7 @@ The console supports three desk modes:
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, optionally revise the preview through feedback rounds, approve exact writeback, then move Status to `Ready for Codex`.
 - Codex Handoff Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then move Status to `In Codex`.
-- Implementation Ready: list `In Codex` tasks that already contain an approved `Codex Handoff Brief:` marker, then preview and approve Controlled Implementation.
+- Implementation Ready: list `In Codex` tasks that already contain an approved `Codex Handoff Brief:` marker, then preview and approve an implementation work-order PR.
 
 Preview cards show whether the shared Product Context Pack was included. This tells the operator whether the agent used Notion product context and bounded GitHub repo context before generating the brief or handoff.
 
@@ -51,17 +51,17 @@ List Ready for Codex tasks
 ```text
 List In Codex tasks with approved Codex Handoff Brief markers
   -> load persisted handoff from Notion
-  -> preview Controlled Implementation Proposal
-  -> review exact proposed files and task-specific verification plan
-  -> approve separate signed implementation token
+  -> preview deterministic implementation work-order proposal
+  -> review exact work-order file and draft PR body
+  -> approve separate signed work-order token
   -> create/update implementation branch
-  -> commit exact approved file changes
-  -> open/update draft PR
-  -> capture available GitHub check evidence
-  -> append implementation result to Notion
+  -> commit .agent-office/work-orders/<notion-task-id>.md
+  -> open/update implementation-pending draft PR
+  -> append work-order PR result and next Codex action to Notion
+  -> Codex implements on the created product branch after this Office step
 ```
 
-Approving the Codex Handoff Brief does not start coding. The implementation lane has its own approval token that signs the exact file changes. Loading a persisted Notion handoff is a v0 resume/recovery path; a durable structured proposal store can replace parser-based resume later.
+Approving the Codex Handoff Brief does not start coding. Approving the work-order PR also does not mean implementation is complete; it creates the branch and starting-point draft PR for Codex to implement on. The implementation lane has its own approval token that signs the exact repository, branch, base SHA, PR title/body, work-order path/content, task ID, and handoff summary. Loading a persisted Notion handoff is a v0 resume/recovery path; a durable structured proposal store can replace parser-based resume later.
 
 ## Approval Token Contract
 
@@ -83,7 +83,7 @@ The approval endpoint requires both:
 - a valid `x-agent-office-api-key`
 - a valid, untampered, unexpired approval token
 
-Approval writes or executes the exact payload embedded in the token. It must not rerun the Architect Agent, rerun the Codex Handoff Agent, rerun the Implementation Agent, call OpenAI, or regenerate GitHub proposal content.
+Approval writes or executes the exact payload embedded in the token. It must not rerun the Architect Agent, rerun the Codex Handoff Agent, call the Implementation Agent for work-order preview, call OpenAI, or regenerate GitHub proposal content.
 
 For Architecture Desk revisions, each revision response replaces the active preview and approval token in the UI. Intermediate previews are not written to Notion. Only the final submitted token is written back.
 
@@ -94,13 +94,13 @@ Before approved writeback, the API checks the task page for the relevant marker:
 - `Architect Brief:` for Architecture Desk
 - `Codex Handoff Brief:` for Implementation Desk
 
-For GitHub Draft PR Prep, the GitHub service checks for duplicate branch/PR before creating the branch. For Controlled Implementation, the GitHub service creates or updates a scoped implementation branch and draft PR, but never pushes to main, merges, deploys, or changes protected repository paths.
+For GitHub Draft PR Prep, the GitHub service checks for duplicate branch/PR before creating the branch. For Controlled Implementation, the GitHub service creates or updates a scoped implementation branch and draft PR with only the approved work-order file, but never pushes to main, merges, deploys, changes protected repository paths, or edits product application files.
 
 ## Future Reuse
 
 The same preview -> approve -> execute shape should be reused for future office actions:
 
-- Codex implementation diff creation
+- Codex implementation on the created product branch
 - Claude review request
 - deployment approval
 - release note writeback

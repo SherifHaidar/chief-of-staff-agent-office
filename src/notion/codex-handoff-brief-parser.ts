@@ -8,6 +8,7 @@ const AGENT_OFFICE_HEADING_PREFIXES = [
   "## Codex Handoff Brief:",
   "## GitHub Draft PR:",
   "## Controlled Implementation Draft PR:",
+  "## Implementation Work-Order Draft PR:",
 ] as const;
 
 const SECTION_TITLES = {

@@ -7,6 +7,7 @@ import {
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
+import { IMPLEMENTATION_PENDING_NOTICE } from "../domain/implementation-proposal.js";
 import type { NotionAppendBlock } from "./notion-types.js";
 
 const MAX_TEXT_LENGTH = 1_900;
@@ -171,8 +172,9 @@ export function renderImplementationResultBlocks(
 ): NotionAppendBlock[] {
   return [
     { type: "divider", divider: {} },
-    heading(2, `Controlled Implementation Draft PR: #${result.pullRequestNumber}`),
+    heading(2, `Implementation Work-Order Draft PR: #${result.pullRequestNumber}`),
     ...paragraph(`Created by chief-of-staff-agent-office Implementation Lane at ${generatedAt.toISOString()}.`),
+    ...paragraph(IMPLEMENTATION_PENDING_NOTICE),
     heading(3, "Pull Request"),
     ...paragraph(result.pullRequestUrl),
     heading(3, "Repository"),
@@ -181,23 +183,25 @@ export function renderImplementationResultBlocks(
     ...paragraph(`${result.branchName} from ${result.baseBranch} @ ${result.baseCommitSha}`),
     heading(3, "Commit"),
     ...paragraph(result.commitSha),
-    heading(3, "Implementation Summary"),
-    ...paragraph(proposal.implementationSummary),
+    heading(3, "Work Order File"),
+    ...paragraph(result.workOrderPath),
+    heading(3, "Next Action"),
+    ...paragraph(result.nextAction),
+    heading(3, "Approved Handoff Summary"),
+    ...paragraph(`Problem: ${proposal.handoffSummary.problemSummary}`),
+    ...paragraph(`Product intent: ${proposal.handoffSummary.productIntent}`),
+    ...listSection("Implementation Scope", proposal.handoffSummary.implementationScope),
+    ...listSection("Likely Affected Files or Modules", proposal.handoffSummary.likelyAffectedFiles),
+    ...listSection("Constraints / Do Not Change", proposal.handoffSummary.constraints),
+    ...listSection("Tests To Run", proposal.handoffSummary.testsToRun),
     ...listSection(
-      "Files Changed",
-      result.changedFiles.map((file) => `${file.action}: ${file.path} - ${file.summary}`),
+      "GitHub Checks Captured",
+      result.checks.map((check) => `${check.name}: ${check.conclusion ?? check.status}`),
     ),
-    ...listSection("Automated Checks", proposal.verificationPlan.automatedChecks),
-    ...listSection("Manual Verification", proposal.verificationPlan.manualChecks),
-    ...listSection("Acceptance Criteria", proposal.verificationPlan.acceptanceCriteria),
-    ...listSection("Regression Risks", proposal.verificationPlan.regressionRisks),
-    heading(3, "Evidence Summary"),
-    ...paragraph(result.evidence.automatedChecksSummary),
-    ...listSection("Evidence Captured", result.evidence.evidence),
-    ...listSection("Verification Gaps", result.evidence.verificationGaps),
-    ...listSection("Context Gaps", proposal.contextGaps),
     heading(3, "Approval Boundary"),
-    ...paragraph("Draft only. Not merged, not deployed, and not approved for production. Sherif must review before merge or deployment."),
+    ...paragraph(
+      "Draft only. Agent Office committed only the implementation work-order file. Product code has not been implemented by this step. Not merged, not deployed, and not approved for production.",
+    ),
   ];
 }
 
