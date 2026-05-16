@@ -68,7 +68,7 @@ export function toRequestHeaders(headers: RequestHeaderSource | undefined): Reco
     if (Array.isArray(rawValue)) {
       const values = rawValue.map(String);
       if (values.length === 1) {
-        requestHeaders[key] = values[0];
+        requestHeaders[key] = values[0] ?? "";
       } else if (values.length > 1) {
         requestHeaders[key] = values;
       }
