@@ -38,7 +38,7 @@ export const ImplementationProposalSchema = z
     prTitle: z.string().min(1),
     repository: z.string().min(1),
     taskId: z.string().min(1),
-    taskName: z.string().min(1).optional(),
+    taskName: z.string().min(1),
     verificationPlan: TaskSpecificVerificationPlanSchema,
   })
   .strict();
