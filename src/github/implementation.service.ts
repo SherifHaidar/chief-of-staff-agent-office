@@ -117,11 +117,17 @@ function hasUnsafePathSegment(path: string): boolean {
 function isProtectedPath(path: string): boolean {
   const lower = path.toLowerCase();
 
+  if (lower === ".env.example") {
+    return false;
+  }
+
   return (
     lower.startsWith(".env") ||
     lower.includes("/.env") ||
     lower.startsWith(".github/") ||
     lower.startsWith(".vercel/") ||
+    lower.startsWith("secrets/") ||
+    lower.includes("/secrets/") ||
     lower === "vercel.json" ||
     lower === "package.json" ||
     lower.endsWith("lock.json") ||
