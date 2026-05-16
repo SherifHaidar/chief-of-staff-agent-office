@@ -6,6 +6,7 @@ import {
 } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
+import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
 import type { NotionAppendBlock } from "./notion-types.js";
 
 const MAX_TEXT_LENGTH = 1_900;
@@ -158,6 +159,43 @@ export function renderGitHubDraftPrResultBlocks(
     ...paragraph(result.commitSha),
     heading(3, "Handoff File"),
     ...paragraph(result.handoffFilePath),
+    heading(3, "Approval Boundary"),
+    ...paragraph("Draft only. Not merged, not deployed, and not approved for production. Sherif must review before merge or deployment."),
+  ];
+}
+
+export function renderImplementationResultBlocks(
+  result: ImplementationExecutionResult,
+  proposal: ImplementationProposal,
+  generatedAt: Date,
+): NotionAppendBlock[] {
+  return [
+    { type: "divider", divider: {} },
+    heading(2, `Controlled Implementation Draft PR: #${result.pullRequestNumber}`),
+    ...paragraph(`Created by chief-of-staff-agent-office Implementation Lane at ${generatedAt.toISOString()}.`),
+    heading(3, "Pull Request"),
+    ...paragraph(result.pullRequestUrl),
+    heading(3, "Repository"),
+    ...paragraph(result.repository),
+    heading(3, "Branch"),
+    ...paragraph(`${result.branchName} from ${result.baseBranch} @ ${result.baseCommitSha}`),
+    heading(3, "Commit"),
+    ...paragraph(result.commitSha),
+    heading(3, "Implementation Summary"),
+    ...paragraph(proposal.implementationSummary),
+    ...listSection(
+      "Files Changed",
+      result.changedFiles.map((file) => `${file.action}: ${file.path} - ${file.summary}`),
+    ),
+    ...listSection("Automated Checks", proposal.verificationPlan.automatedChecks),
+    ...listSection("Manual Verification", proposal.verificationPlan.manualChecks),
+    ...listSection("Acceptance Criteria", proposal.verificationPlan.acceptanceCriteria),
+    ...listSection("Regression Risks", proposal.verificationPlan.regressionRisks),
+    heading(3, "Evidence Summary"),
+    ...paragraph(result.evidence.automatedChecksSummary),
+    ...listSection("Evidence Captured", result.evidence.evidence),
+    ...listSection("Verification Gaps", result.evidence.verificationGaps),
+    ...listSection("Context Gaps", proposal.contextGaps),
     heading(3, "Approval Boundary"),
     ...paragraph("Draft only. Not merged, not deployed, and not approved for production. Sherif must review before merge or deployment."),
   ];

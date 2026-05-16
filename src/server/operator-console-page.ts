@@ -110,6 +110,8 @@ export function renderOperatorConsolePage(): string {
             <button class="primary" id="approveButton" disabled>Approve writeback</button>
             <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
             <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
+            <button id="implementationPreviewButton" hidden disabled>Preview implementation</button>
+            <button class="primary" id="implementationApproveButton" hidden disabled>Create implementation PR</button>
           </div>
         </div>
         <div class="status" id="previewStatus"></div>
@@ -166,6 +168,8 @@ export function renderOperatorConsolePage(): string {
       codexHandoffApprovalToken: null,
       githubApproval: null,
       githubProposal: null,
+      implementationApproval: null,
+      implementationProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
       productContext: null,
       revisionNumber: 0,
@@ -183,6 +187,8 @@ export function renderOperatorConsolePage(): string {
     const expiresAt = document.getElementById("expiresAt");
     const githubApproveButton = document.getElementById("githubApproveButton");
     const githubPreviewButton = document.getElementById("githubPreviewButton");
+    const implementationApproveButton = document.getElementById("implementationApproveButton");
+    const implementationPreviewButton = document.getElementById("implementationPreviewButton");
     const globalStatus = document.getElementById("globalStatus");
     const loadTasksButton = document.getElementById("loadTasksButton");
     const previewButton = document.getElementById("previewButton");
@@ -240,6 +246,8 @@ export function renderOperatorConsolePage(): string {
       state.codexHandoffApprovalToken = null;
       state.githubApproval = null;
       state.githubProposal = null;
+      state.implementationApproval = null;
+      state.implementationProposal = null;
       state.productContext = null;
       state.revisionNumber = 0;
       state.selectedTask = null;
@@ -252,8 +260,12 @@ export function renderOperatorConsolePage(): string {
       result.hidden = true;
       githubPreviewButton.hidden = state.mode !== "implementation";
       githubApproveButton.hidden = state.mode !== "implementation";
+      implementationPreviewButton.hidden = state.mode !== "implementation";
+      implementationApproveButton.hidden = state.mode !== "implementation";
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
+      implementationPreviewButton.disabled = true;
+      implementationApproveButton.disabled = true;
       revisionFeedback.value = "";
       revisionPanel.hidden = true;
       reviseButton.disabled = true;
@@ -287,6 +299,8 @@ export function renderOperatorConsolePage(): string {
       state.codexHandoffApprovalToken = null;
       state.githubApproval = null;
       state.githubProposal = null;
+      state.implementationApproval = null;
+      state.implementationProposal = null;
       state.productContext = null;
       state.revisionNumber = 0;
       selectedTaskTitle.textContent = task.name;
@@ -295,6 +309,8 @@ export function renderOperatorConsolePage(): string {
       approveButton.disabled = true;
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
+      implementationPreviewButton.disabled = true;
+      implementationApproveButton.disabled = true;
       approvalPanel.hidden = true;
       revisionFeedback.value = "";
       revisionPanel.hidden = true;
@@ -388,6 +404,36 @@ export function renderOperatorConsolePage(): string {
       ].join("");
     }
 
+    function renderImplementationProposal(proposal) {
+      const files = proposal.changedFiles.map(function (file) {
+        return '<li><strong>' + escapeHtml(file.action) + '</strong> ' + escapeHtml(file.path) + ' - ' + escapeHtml(file.summary) + '</li>';
+      }).join('');
+      const gaps = proposal.contextGaps.length === 0
+        ? '<li>None reported.</li>'
+        : proposal.contextGaps.map(function (gap) { return '<li>' + escapeHtml(gap) + '</li>'; }).join('');
+      const contents = proposal.changedFiles.map(function (file) {
+        return '<p><strong>' + escapeHtml(file.path) + '</strong></p><pre class="proposal-pre">' + escapeHtml(file.content) + '</pre>';
+      }).join('');
+
+      briefPreview.innerHTML = [
+        '<div class="brief-title">' + escapeHtml(proposal.prTitle) + '</div>',
+        '<p><strong>Repository:</strong> ' + escapeHtml(proposal.repository) + '</p>',
+        '<p><strong>Base:</strong> ' + escapeHtml(proposal.baseBranch) + ' @ ' + escapeHtml(proposal.baseCommitSha) + '</p>',
+        '<p><strong>Branch:</strong> ' + escapeHtml(proposal.branchName) + '</p>',
+        '<h3>Implementation Summary</h3><p>' + escapeHtml(proposal.implementationSummary) + '</p>',
+        '<h3>Proposed Files</h3><ul>' + files + '</ul>',
+        renderList('Automated Checks', proposal.verificationPlan.automatedChecks),
+        renderList('Manual Checks', proposal.verificationPlan.manualChecks),
+        renderList('Acceptance Criteria', proposal.verificationPlan.acceptanceCriteria),
+        renderList('Regression Risks', proposal.verificationPlan.regressionRisks),
+        renderList('Evidence To Collect', proposal.verificationPlan.evidenceToCollect),
+        '<h3>Context Gaps</h3><ul>' + gaps + '</ul>',
+        '<h3>PR Body</h3><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre>',
+        '<h3>Exact File Contents</h3>' + contents,
+        '<h3>Approval Boundary</h3><p>Draft only. This will not merge, deploy, push to main, or change repo settings/secrets.</p>'
+      ].join("");
+    }
+
     function renderList(title, items) {
       if (!items || items.length === 0) {
         return "";
@@ -457,6 +503,8 @@ export function renderOperatorConsolePage(): string {
         approveButton.disabled = true;
         githubPreviewButton.disabled = true;
         githubApproveButton.disabled = true;
+        implementationPreviewButton.disabled = true;
+        implementationApproveButton.disabled = true;
         setStatus(previewStatus, "Generating preview...");
         const body = state.mode === "architecture"
           ? { taskId: state.selectedTask.taskId, dryRun: true }
@@ -471,6 +519,8 @@ export function renderOperatorConsolePage(): string {
         state.codexHandoffApprovalToken = state.mode === "implementation" ? payload.approval.token : null;
         state.githubApproval = null;
         state.githubProposal = null;
+        state.implementationApproval = null;
+        state.implementationProposal = null;
         state.productContext = payload.productContext || null;
         state.revisionNumber = payload.approval.revisionNumber || 1;
         renderArtifact(state.artifact);
@@ -551,6 +601,7 @@ export function renderOperatorConsolePage(): string {
         showResult(payload);
         if (state.mode === "implementation") {
           githubPreviewButton.disabled = false;
+          implementationPreviewButton.disabled = false;
         }
       } catch (error) {
         approveButton.disabled = false;
@@ -604,6 +655,56 @@ export function renderOperatorConsolePage(): string {
         showResult(payload);
       } catch (error) {
         githubApproveButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    implementationPreviewButton.addEventListener("click", async function () {
+      if (!state.codexHandoffApprovalToken) {
+        return;
+      }
+
+      try {
+        implementationPreviewButton.disabled = true;
+        implementationApproveButton.disabled = true;
+        setStatus(previewStatus, "Generating controlled implementation proposal...");
+        const payload = await agentFetch("/agent-office/github/implementation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codexHandoffApprovalToken: state.codexHandoffApprovalToken })
+        });
+        state.implementationApproval = payload.approval;
+        state.implementationProposal = payload.proposal;
+        renderImplementationProposal(payload.proposal);
+        briefHash.textContent = "Implementation " + payload.approval.proposalHash.slice(0, 12);
+        expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
+        approvalPanel.hidden = false;
+        implementationApproveButton.disabled = false;
+        setStatus(previewStatus, "Controlled implementation proposal ready.", "ok");
+        showResult(payload.run);
+      } catch (error) {
+        implementationPreviewButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    implementationApproveButton.addEventListener("click", async function () {
+      if (!state.implementationApproval) {
+        return;
+      }
+
+      try {
+        implementationApproveButton.disabled = true;
+        setStatus(previewStatus, "Creating approved implementation branch and draft PR...");
+        const payload = await agentFetch("/agent-office/github/implementation/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approvalToken: state.implementationApproval.token })
+        });
+        setStatus(previewStatus, "Implementation draft PR created and linked back to Notion.", "ok");
+        showResult(payload);
+      } catch (error) {
+        implementationApproveButton.disabled = false;
         setStatus(previewStatus, error.message, "error");
       }
     });

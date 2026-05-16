@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArchitectBrief } from "../src/domain/architect-brief.js";
-import { chunkBlocks, renderArchitectBriefBlocks } from "../src/notion/notion-block-renderer.js";
+import type { ImplementationExecutionResult, ImplementationProposal } from "../src/domain/implementation-proposal.js";
+import { chunkBlocks, renderArchitectBriefBlocks, renderImplementationResultBlocks } from "../src/notion/notion-block-renderer.js";
 
 const brief: ArchitectBrief = {
   briefTitle: "Orchestrator v0",
@@ -55,5 +56,57 @@ describe("renderArchitectBriefBlocks", () => {
     expect(chunks).toHaveLength(3);
     expect(chunks[0]).toHaveLength(100);
     expect(chunks[2]).toHaveLength(5);
+  });
+});
+
+describe("renderImplementationResultBlocks", () => {
+  it("renders implementation PR evidence and verification details", () => {
+    const proposal: ImplementationProposal = {
+      approvalWarnings: ["Draft only."],
+      baseBranch: "main",
+      baseCommitSha: "base-sha",
+      branchName: "agent-office/impl-test",
+      changedFiles: [{ action: "update", content: "export const ok = true;\n", path: "lib/capture.ts", summary: "Update capture." }],
+      commitMessage: "Update capture",
+      contextGaps: ["One additional file should be inspected manually."],
+      draft: true,
+      implementationSummary: "Update the capture helper.",
+      prBody: "## Summary\n- Update capture",
+      prTitle: "[Draft] Update capture",
+      repository: "SherifHaidar/personal-chief-of-staff",
+      taskId: "22222222-2222-2222-2222-222222222222",
+      verificationPlan: {
+        acceptanceCriteria: ["Capture works."],
+        automatedChecks: ["npm test"],
+        evidenceToCollect: ["GitHub checks"],
+        manualChecks: ["Submit a test capture."],
+        regressionRisks: ["Capture regression."],
+      },
+    };
+    const result: ImplementationExecutionResult = {
+      baseBranch: "main",
+      baseCommitSha: "base-sha",
+      branchName: "agent-office/impl-test",
+      changedFiles: [{ action: "update", path: "lib/capture.ts", summary: "Update capture." }],
+      checks: [{ conclusion: "success", name: "CI", status: "completed" }],
+      commitSha: "commit-sha",
+      draft: true,
+      evidence: {
+        automatedChecksSummary: "GitHub checks reported no failing conclusions at capture time.",
+        evidence: ["CI: success"],
+        verificationGaps: [],
+      },
+      pullRequestNumber: 55,
+      pullRequestUrl: "https://github.com/SherifHaidar/personal-chief-of-staff/pull/55",
+      repository: "SherifHaidar/personal-chief-of-staff",
+    };
+
+    const blocks = renderImplementationResultBlocks(result, proposal, new Date("2026-05-14T12:00:00.000Z"));
+    const serialized = JSON.stringify(blocks);
+
+    expect(serialized).toContain("Controlled Implementation Draft PR");
+    expect(serialized).toContain("Verification Gaps");
+    expect(serialized).toContain("CI: success");
+    expect(serialized).toContain("Draft only");
   });
 });

@@ -12,10 +12,13 @@ import { ArchitectTaskWorkflow } from "./workflows/architect-task.workflow.js";
 import { CodexHandoffWorkflow } from "./workflows/codex-handoff.workflow.js";
 
 export * from "./agents/architect.agent.js";
+export * from "./agents/agent-registry.js";
 export * from "./agents/codex-handoff.agent.js";
+export * from "./agents/implementation.agent.js";
 export * from "./approval/architect-brief-approval.js";
 export * from "./approval/codex-handoff-approval.js";
 export * from "./approval/github-draft-pr-approval.js";
+export * from "./approval/implementation-approval.js";
 export * from "./audit/run-log.js";
 export * from "./audit/run-summary.js";
 export * from "./config/env.js";
@@ -25,10 +28,12 @@ export * from "./domain/architect-brief.js";
 export * from "./domain/architect-brief-writeback.js";
 export * from "./domain/codex-handoff-brief.js";
 export * from "./domain/github-draft-pr.js";
+export * from "./domain/implementation-proposal.js";
 export * from "./domain/product-context-pack.js";
 export * from "./domain/ready-architecture-task.js";
 export * from "./github/github-app-client.js";
 export * from "./github/github-draft-pr.service.js";
+export * from "./github/implementation.service.js";
 export * from "./github/github-policy.js";
 export * from "./github/product-repo-context.service.js";
 export * from "./notion/product-context.repository.js";
@@ -36,6 +41,7 @@ export * from "./notion/notion-task.repository.js";
 export * from "./workflows/architect-task.workflow.js";
 export * from "./workflows/codex-handoff.workflow.js";
 export * from "./workflows/github-draft-pr.workflow.js";
+export * from "./workflows/implementation.workflow.js";
 export * from "./workflows/workflow-result.js";
 
 export function createNotionTaskRepository(env: AppEnv): NotionTaskRepository {

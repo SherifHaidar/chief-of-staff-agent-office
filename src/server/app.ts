@@ -18,6 +18,11 @@ import {
   GitHubDraftPrApprovalTokenError,
   verifyGitHubDraftPrApproval,
 } from "../approval/github-draft-pr-approval.js";
+import {
+  createImplementationApproval,
+  ImplementationApprovalTokenError,
+  verifyImplementationApproval,
+} from "../approval/implementation-approval.js";
 import type { RunLog } from "../audit/run-log.js";
 import { noopRunLog } from "../audit/run-log.js";
 import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
@@ -39,6 +44,11 @@ import type {
   GitHubDraftPrPreviewInput,
   GitHubDraftPrWorkflowResult,
 } from "../workflows/github-draft-pr.workflow.js";
+import type {
+  ApprovedImplementationInput,
+  ImplementationPreviewInput,
+  ImplementationWorkflowResult,
+} from "../workflows/implementation.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
 import { renderOperatorConsolePage } from "./operator-console-page.js";
 
@@ -80,14 +90,24 @@ export type ApprovedGitHubDraftPrWriter = {
   createApprovedDraftPr(input: ApprovedGitHubDraftPrInput): Promise<GitHubDraftPrWorkflowResult>;
 };
 
+export type ImplementationWorkflowRunner = {
+  preview(input: ImplementationPreviewInput): Promise<ImplementationWorkflowResult>;
+};
+
+export type ApprovedImplementationWriter = {
+  createApprovedImplementation(input: ApprovedImplementationInput): Promise<ImplementationWorkflowResult>;
+};
+
 export type AgentOfficeAppOptions = {
   apiKey: string;
   approvalSecret: string;
   approvedBriefWriter: ApprovedArchitectBriefWriter;
   approvedCodexHandoffWriter?: ApprovedCodexHandoffWriter;
   approvedGitHubDraftPrWriter?: ApprovedGitHubDraftPrWriter;
+  approvedImplementationWriter?: ApprovedImplementationWriter;
   codexHandoffWorkflow?: CodexHandoffWorkflowRunner;
   githubDraftPrWorkflow?: GitHubDraftPrWorkflowRunner;
+  implementationWorkflow?: ImplementationWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   readyCodexScanner?: ReadyCodexTaskScanner;
   runLog?: RunLog;
@@ -97,7 +117,11 @@ export type AgentOfficeAppOptions = {
   workflow: ArchitectReviewWorkflow;
 };
 
-type AnyWorkflowResult = CodexHandoffWorkflowResult | GitHubDraftPrWorkflowResult | WorkflowResult;
+type AnyWorkflowResult =
+  | CodexHandoffWorkflowResult
+  | GitHubDraftPrWorkflowResult
+  | ImplementationWorkflowResult
+  | WorkflowResult;
 
 const ArchitectReviewRequestSchema = z
   .object({
@@ -139,6 +163,18 @@ const GitHubDraftPrRequestSchema = z
   .strict();
 
 const GitHubDraftPrApprovalRequestSchema = z
+  .object({
+    approvalToken: z.string().trim().min(1, "approvalToken is required"),
+  })
+  .strict();
+
+const ImplementationRequestSchema = z
+  .object({
+    codexHandoffApprovalToken: z.string().trim().min(1, "codexHandoffApprovalToken is required"),
+  })
+  .strict();
+
+const ImplementationApprovalRequestSchema = z
   .object({
     approvalToken: z.string().trim().min(1, "approvalToken is required"),
   })
@@ -1046,6 +1082,186 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       dryRun: false,
       github: result.github,
       githubDraftPrCreated: true,
+      ok: true,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/github/implementation", async (request, reply) => {
+    const parsed = ImplementationRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+      });
+    }
+
+    let codexApproval;
+    try {
+      codexApproval = verifyCodexHandoffApproval({
+        secret: approvalSecret,
+        token: parsed.data.codexHandoffApprovalToken,
+      });
+    } catch (error) {
+      if (error instanceof CodexHandoffApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+        });
+      }
+
+      throw error;
+    }
+
+    const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
+    const workflow = requireConfiguredFeature(options.implementationWorkflow, "Controlled Implementation workflow");
+    const startedAt = new Date();
+    const runId = createRunId(startedAt);
+
+    try {
+      const hasApprovedHandoff = await scanner.hasCodexHandoffBrief(codexApproval.taskId);
+      if (!hasApprovedHandoff) {
+        const run = buildRunSummary({
+          dryRun: true,
+          finishedAt: new Date(),
+          reason: "Codex Handoff Brief must be approved and written to Notion before controlled implementation.",
+          runId,
+          startedAt,
+          taskId: codexApproval.taskId,
+          taskName: codexApproval.taskName,
+          workflow: "implementation",
+        });
+        await recordRun(runLog, run);
+
+        return reply.code(409).send({
+          error: run.reason,
+          ok: false,
+          run,
+          taskId: codexApproval.taskId,
+        });
+      }
+    } catch (error) {
+      const run = buildRunSummary({
+        dryRun: true,
+        error: getErrorMessage(error),
+        finishedAt: new Date(),
+        runId,
+        startedAt,
+        taskId: codexApproval.taskId,
+        taskName: codexApproval.taskName,
+        workflow: "implementation",
+      });
+      await recordRun(runLog, run);
+
+      return reply.code(500).send({
+        error: run.error,
+        ok: false,
+        run,
+        taskId: codexApproval.taskId,
+      });
+    }
+
+    const result = await workflow.preview({ payload: codexApproval });
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId,
+      startedAt,
+      taskId: codexApproval.taskId,
+      taskName: codexApproval.taskName,
+      workflow: "implementation",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? codexApproval.taskId,
+      });
+    }
+
+    const approval = createImplementationApproval({
+      previewRunId: run.runId,
+      proposal: result.proposal,
+      secret: approvalSecret,
+    });
+
+    return reply.send({
+      approval,
+      dryRun: true,
+      implementationProposalGenerated: true,
+      ok: true,
+      proposal: result.proposal,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/github/implementation/approve", async (request, reply) => {
+    const parsed = ImplementationApprovalRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+      });
+    }
+
+    let approval;
+    try {
+      approval = verifyImplementationApproval({
+        secret: approvalSecret,
+        token: parsed.data.approvalToken,
+      });
+    } catch (error) {
+      if (error instanceof ImplementationApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+        });
+      }
+
+      throw error;
+    }
+
+    const writer = requireConfiguredFeature(options.approvedImplementationWriter, "Approved Controlled Implementation writer");
+    const startedAt = new Date();
+    const result = await writer.createApprovedImplementation({ proposal: approval.proposal });
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: approval.proposal.taskId,
+      taskName: approval.proposal.taskName,
+      workflow: "implementation",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? approval.proposal.taskId,
+      });
+    }
+
+    return reply.send({
+      approval: {
+        expiresAt: approval.expiresAt,
+        previewRunId: approval.previewRunId,
+        proposalHash: approval.proposalHash,
+      },
+      dryRun: false,
+      github: result.github,
+      implementationCreated: true,
       ok: true,
       run,
       taskId: result.pageId,

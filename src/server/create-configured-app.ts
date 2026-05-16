@@ -2,10 +2,18 @@ import { JsonlRunLog } from "../audit/run-log.js";
 import type { AppEnv } from "../config/env.js";
 import { GitHubAppClient } from "../github/github-app-client.js";
 import { GitHubDraftPrService } from "../github/github-draft-pr.service.js";
+import { ImplementationService } from "../github/implementation.service.js";
 import { parseCsvList } from "../github/github-policy.js";
-import { createArchitectTaskWorkflow, createCodexHandoffWorkflow, createNotionTaskRepository } from "../index.js";
+import {
+  createAgentRegistry,
+  createArchitectTaskWorkflow,
+  createCodexHandoffWorkflow,
+  createNotionTaskRepository,
+  createProductContextProvider,
+} from "../index.js";
 import { consoleLogger } from "../utils/logger.js";
 import { GitHubDraftPrWorkflow } from "../workflows/github-draft-pr.workflow.js";
+import { ImplementationWorkflow } from "../workflows/implementation.workflow.js";
 import { createAgentOfficeApp } from "./app.js";
 
 export function requiredServerConfig(value: string | undefined, name: string): string {
@@ -39,6 +47,37 @@ function createGitHubDraftPrWorkflowIfConfigured(env: AppEnv, taskRepository: Re
   });
 }
 
+function createImplementationWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_INSTALLATION_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+    return undefined;
+  }
+
+  process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
+
+  const githubClient = new GitHubAppClient({
+    appId: env.GITHUB_APP_ID,
+    installationId: env.GITHUB_APP_INSTALLATION_ID,
+    privateKey: env.GITHUB_APP_PRIVATE_KEY,
+  });
+  const implementationService = new ImplementationService(githubClient, {
+    allowedBranchPrefixes: parseCsvList(env.GITHUB_ALLOWED_BRANCH_PREFIXES, ["agent-office/", "codex/"]),
+    allowedRepositories: parseCsvList(env.GITHUB_ALLOWED_REPOS, [env.TARGET_PRODUCT_REPO]),
+    defaultBaseBranch: env.GITHUB_DEFAULT_BASE_BRANCH,
+    maxChangedFiles: env.IMPLEMENTATION_MAX_CHANGED_FILES,
+    maxFileChars: env.IMPLEMENTATION_MAX_FILE_CHARS,
+    maxTotalChangeChars: env.IMPLEMENTATION_MAX_TOTAL_CHANGE_CHARS,
+  });
+  const agents = createAgentRegistry({ model: env.OPENAI_MODEL });
+
+  return new ImplementationWorkflow({
+    implementationAgent: agents.implementation,
+    implementationService,
+    logger: consoleLogger,
+    productContextProvider: createProductContextProvider(env),
+    taskRepository,
+  });
+}
+
 export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const apiKey = requiredServerConfig(env.AGENT_OFFICE_API_KEY, "AGENT_OFFICE_API_KEY");
   const approvalSecret = requiredServerConfig(env.AGENT_OFFICE_APPROVAL_SECRET, "AGENT_OFFICE_APPROVAL_SECRET");
@@ -47,6 +86,7 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const workflow = createArchitectTaskWorkflow(env);
   const codexHandoffWorkflow = createCodexHandoffWorkflow(env);
   const githubDraftPrWorkflow = createGitHubDraftPrWorkflowIfConfigured(env, taskRepository);
+  const implementationWorkflow = createImplementationWorkflowIfConfigured(env, taskRepository);
 
   return createAgentOfficeApp({
     apiKey,
@@ -54,8 +94,10 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
     approvedBriefWriter: workflow,
     approvedCodexHandoffWriter: codexHandoffWorkflow,
     approvedGitHubDraftPrWriter: githubDraftPrWorkflow,
+    approvedImplementationWriter: implementationWorkflow,
     codexHandoffWorkflow,
     githubDraftPrWorkflow,
+    implementationWorkflow,
     readyArchitectureScanner: {
       findReadyForArchitectureTasks: () =>
         taskRepository.findReadyForArchitectureTasks({
