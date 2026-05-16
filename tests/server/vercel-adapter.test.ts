@@ -31,6 +31,15 @@ describe("Vercel adapter", () => {
     ).toBe("/agent-office/codex-handoff");
   });
 
+  it("maps the explicit implementation-ready task function to the existing API route", () => {
+    expect(
+      toFastifyInjectUrl(
+        "https://agent-office.example.com/api/agent-office/tasks/implementation-ready",
+        "/agent-office/tasks/implementation-ready",
+      ),
+    ).toBe("/agent-office/tasks/implementation-ready");
+  });
+
   it("maps the explicit GitHub Draft PR Prep function to the existing API route", () => {
     expect(
       toFastifyInjectUrl(
@@ -69,6 +78,10 @@ describe("Vercel adapter", () => {
         {
           source: "/agent-office/tasks/ready-for-codex",
           destination: "/api/agent-office/tasks/ready-for-codex",
+        },
+        {
+          source: "/agent-office/tasks/implementation-ready",
+          destination: "/api/agent-office/tasks/implementation-ready",
         },
         { source: "/agent-office/architect-review", destination: "/api/agent-office/architect-review" },
         { source: "/agent-office/architect-review/revise", destination: "/api/agent-office/architect-review/revise" },

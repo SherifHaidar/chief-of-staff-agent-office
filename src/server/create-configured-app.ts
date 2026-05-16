@@ -87,6 +87,7 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const codexHandoffWorkflow = createCodexHandoffWorkflow(env);
   const githubDraftPrWorkflow = createGitHubDraftPrWorkflowIfConfigured(env, taskRepository);
   const implementationWorkflow = createImplementationWorkflowIfConfigured(env, taskRepository);
+  const implementationReadyStatus = env.NOTION_STATUS_AFTER_CODEX_HANDOFF ?? "In Codex";
 
   return createAgentOfficeApp({
     apiKey,
@@ -97,6 +98,18 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
     approvedImplementationWriter: implementationWorkflow,
     codexHandoffWorkflow,
     githubDraftPrWorkflow,
+    implementationReadyScanner: {
+      findImplementationReadyTasks: () =>
+        taskRepository.findImplementationReadyTasks({
+          databaseId: taskDatabaseId,
+          statusName: implementationReadyStatus,
+        }),
+      loadApprovedCodexHandoff: (taskId) =>
+        taskRepository.loadApprovedCodexHandoffForImplementation({
+          pageId: taskId,
+          statusName: implementationReadyStatus,
+        }),
+    },
     implementationWorkflow,
     readyArchitectureScanner: {
       findReadyForArchitectureTasks: () =>

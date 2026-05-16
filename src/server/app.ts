@@ -9,8 +9,11 @@ import {
   verifyArchitectBriefApproval,
 } from "../approval/architect-brief-approval.js";
 import {
+  CODEX_HANDOFF_APPROVAL_ACTION,
   CodexHandoffApprovalTokenError,
   createCodexHandoffApproval,
+  hashCodexHandoffBrief,
+  type CodexHandoffApprovalPayload,
   verifyCodexHandoffApproval,
 } from "../approval/codex-handoff-approval.js";
 import {
@@ -28,6 +31,7 @@ import { noopRunLog } from "../audit/run-log.js";
 import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
 import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
+import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import type {
   ApprovedArchitectBriefWritebackInput,
@@ -82,6 +86,18 @@ export type ReadyCodexTaskScanner = {
   hasCodexHandoffBrief(taskId: string): Promise<boolean>;
 };
 
+export type ApprovedCodexHandoffResume = {
+  handoff: CodexHandoffBrief;
+  status?: string;
+  taskId: string;
+  taskName: string;
+};
+
+export type ImplementationReadyTaskScanner = {
+  findImplementationReadyTasks(): Promise<ReadyArchitectureTask[]>;
+  loadApprovedCodexHandoff(taskId: string): Promise<ApprovedCodexHandoffResume>;
+};
+
 export type GitHubDraftPrWorkflowRunner = {
   preview(input: GitHubDraftPrPreviewInput): Promise<GitHubDraftPrWorkflowResult>;
 };
@@ -107,6 +123,7 @@ export type AgentOfficeAppOptions = {
   approvedImplementationWriter?: ApprovedImplementationWriter;
   codexHandoffWorkflow?: CodexHandoffWorkflowRunner;
   githubDraftPrWorkflow?: GitHubDraftPrWorkflowRunner;
+  implementationReadyScanner?: ImplementationReadyTaskScanner;
   implementationWorkflow?: ImplementationWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   readyCodexScanner?: ReadyCodexTaskScanner;
@@ -170,9 +187,20 @@ const GitHubDraftPrApprovalRequestSchema = z
 
 const ImplementationRequestSchema = z
   .object({
-    codexHandoffApprovalToken: z.string().trim().min(1, "codexHandoffApprovalToken is required"),
+    codexHandoffApprovalToken: z.string().trim().min(1).optional(),
+    taskId: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const providedInputs = [value.codexHandoffApprovalToken, value.taskId].filter(Boolean).length;
+
+    if (providedInputs !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide exactly one of codexHandoffApprovalToken or taskId.",
+      });
+    }
+  });
 
 const ImplementationApprovalRequestSchema = z
   .object({
@@ -372,6 +400,28 @@ function buildRunSummary(input: {
   );
 }
 
+function createResumedCodexHandoffPayload(input: {
+  now: Date;
+  previewRunId: string;
+  resume: ApprovedCodexHandoffResume;
+  statusAfterWriteback?: string;
+}): CodexHandoffApprovalPayload {
+  const expiresAt = new Date(input.now.getTime() + 120 * 60_000);
+
+  return {
+    action: CODEX_HANDOFF_APPROVAL_ACTION,
+    createdAt: input.now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    handoff: input.resume.handoff,
+    handoffHash: hashCodexHandoffBrief(input.resume.handoff),
+    previewRunId: input.previewRunId,
+    ...(input.statusAfterWriteback ? { statusAfterWriteback: input.statusAfterWriteback } : {}),
+    targetProductRepo: input.resume.handoff.targetProductRepo,
+    taskId: input.resume.taskId,
+    taskName: input.resume.taskName,
+  };
+}
+
 async function recordRun(runLog: RunLog, summary: AgentOfficeRunSummary): Promise<void> {
   await runLog.record(summary);
 }
@@ -423,6 +473,16 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
   app.get("/agent-office/tasks/ready-for-codex", async () => {
     const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
     const tasks = await scanner.findReadyForCodexTasks();
+
+    return {
+      ok: true,
+      tasks,
+    };
+  });
+
+  app.get("/agent-office/tasks/implementation-ready", async () => {
+    const scanner = requireConfiguredFeature(options.implementationReadyScanner, "Implementation ready scanner");
+    const tasks = await scanner.findImplementationReadyTasks();
 
     return {
       ok: true,
@@ -1098,35 +1158,57 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       });
     }
 
-    let codexApproval;
-    try {
-      codexApproval = verifyCodexHandoffApproval({
-        secret: approvalSecret,
-        token: parsed.data.codexHandoffApprovalToken,
-      });
-    } catch (error) {
-      if (error instanceof CodexHandoffApprovalTokenError) {
-        return reply.code(401).send({
-          error: error.message,
-          ok: false,
-        });
-      }
-
-      throw error;
-    }
-
-    const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
     const workflow = requireConfiguredFeature(options.implementationWorkflow, "Controlled Implementation workflow");
     const startedAt = new Date();
     const runId = createRunId(startedAt);
+    let codexApproval: CodexHandoffApprovalPayload;
 
-    try {
-      const hasApprovedHandoff = await scanner.hasCodexHandoffBrief(codexApproval.taskId);
-      if (!hasApprovedHandoff) {
+    if (parsed.data.codexHandoffApprovalToken) {
+      try {
+        codexApproval = verifyCodexHandoffApproval({
+          secret: approvalSecret,
+          token: parsed.data.codexHandoffApprovalToken,
+        });
+      } catch (error) {
+        if (error instanceof CodexHandoffApprovalTokenError) {
+          return reply.code(401).send({
+            error: error.message,
+            ok: false,
+          });
+        }
+
+        throw error;
+      }
+
+      const scanner = requireConfiguredFeature(options.readyCodexScanner, "Ready for Codex scanner");
+
+      try {
+        const hasApprovedHandoff = await scanner.hasCodexHandoffBrief(codexApproval.taskId);
+        if (!hasApprovedHandoff) {
+          const run = buildRunSummary({
+            dryRun: true,
+            finishedAt: new Date(),
+            reason: "Codex Handoff Brief must be approved and written to Notion before controlled implementation.",
+            runId,
+            startedAt,
+            taskId: codexApproval.taskId,
+            taskName: codexApproval.taskName,
+            workflow: "implementation",
+          });
+          await recordRun(runLog, run);
+
+          return reply.code(409).send({
+            error: run.reason,
+            ok: false,
+            run,
+            taskId: codexApproval.taskId,
+          });
+        }
+      } catch (error) {
         const run = buildRunSummary({
           dryRun: true,
+          error: getErrorMessage(error),
           finishedAt: new Date(),
-          reason: "Codex Handoff Brief must be approved and written to Notion before controlled implementation.",
           runId,
           startedAt,
           taskId: codexApproval.taskId,
@@ -1135,32 +1217,45 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
         });
         await recordRun(runLog, run);
 
-        return reply.code(409).send({
-          error: run.reason,
+        return reply.code(500).send({
+          error: run.error,
           ok: false,
           run,
           taskId: codexApproval.taskId,
         });
       }
-    } catch (error) {
-      const run = buildRunSummary({
-        dryRun: true,
-        error: getErrorMessage(error),
-        finishedAt: new Date(),
-        runId,
-        startedAt,
-        taskId: codexApproval.taskId,
-        taskName: codexApproval.taskName,
-        workflow: "implementation",
-      });
-      await recordRun(runLog, run);
+    } else {
+      const scanner = requireConfiguredFeature(options.implementationReadyScanner, "Implementation ready scanner");
+      const taskId = parsed.data.taskId ?? "";
 
-      return reply.code(500).send({
-        error: run.error,
-        ok: false,
-        run,
-        taskId: codexApproval.taskId,
-      });
+      try {
+        const resume = await scanner.loadApprovedCodexHandoff(taskId);
+        codexApproval = createResumedCodexHandoffPayload({
+          now: startedAt,
+          previewRunId: `notion-handoff:${runId}`,
+          resume,
+          statusAfterWriteback: options.statusAfterCodexHandoff,
+        });
+      } catch (error) {
+        const statusCode = getHttpStatusCode(error);
+        const run = buildRunSummary({
+          dryRun: true,
+          finishedAt: new Date(),
+          ...(statusCode < 500 ? { reason: getErrorMessage(error) } : { error: getErrorMessage(error) }),
+          runId,
+          startedAt,
+          taskId,
+          workflow: "implementation",
+        });
+        await recordRun(runLog, run);
+
+        return reply.code(statusCode).send({
+          error: run.reason ?? run.error,
+          ok: false,
+          run,
+          taskId,
+        });
+      }
     }
 
     const result = await workflow.preview({ payload: codexApproval });

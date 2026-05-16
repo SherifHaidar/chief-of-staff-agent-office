@@ -6,22 +6,26 @@ It is intentionally not a direct Codex runner. The deployed Agent Office does no
 
 ## Flow
 
-1. A Notion task has an approved Codex Handoff Brief written back to the task page.
-2. The Operator Console previews a Controlled Implementation Proposal.
-3. The proposal includes exact file paths and complete replacement file contents.
-4. Sherif reviews the proposed files and task-specific verification plan.
-5. A separate implementation approval token is created for the exact proposal.
-6. Approval creates or updates an `agent-office/*` or `codex/*` branch.
-7. The Agent Office commits the exact approved file changes.
-8. The Agent Office opens or updates a draft PR against `main`.
-9. The Agent Office captures available GitHub check/status evidence.
-10. The Agent Office appends the branch, PR, commit, changed files, verification plan, and evidence summary back to the same Notion task.
+1. A Notion task is `In Codex` and has an approved Codex Handoff Brief written back to the task page.
+2. The Operator Console lists it as Implementation Ready.
+3. The Operator Console loads the persisted Codex Handoff Brief from Notion as a v0 resume/recovery path.
+4. The Operator Console previews a Controlled Implementation Proposal.
+5. The proposal includes exact file paths and complete replacement file contents.
+6. Sherif reviews the proposed files and task-specific verification plan.
+7. A separate implementation approval token is created for the exact proposal.
+8. Approval creates or updates an `agent-office/*` or `codex/*` branch.
+9. The Agent Office commits the exact approved file changes.
+10. The Agent Office opens or updates a draft PR against `main`.
+11. The Agent Office captures available GitHub check/status evidence.
+12. The Agent Office appends the branch, PR, commit, changed files, verification plan, and evidence summary back to the same Notion task.
 
 ## Approval Boundary
 
 Approving an Architect Brief or Codex Handoff Brief does not approve coding.
 
 Coding requires a separate Controlled Implementation Proposal approval. The approval token embeds the exact implementation proposal and hashes it. If the file paths, file contents, branch, PR body, verification plan, or other proposal fields change, the old token no longer approves the new proposal.
+
+For v0, already-approved `In Codex` tasks can be resumed by parsing the persisted `Codex Handoff Brief:` Notion writeback. This is a recovery path for the current Office workflow, not the long-term durable proposal store.
 
 ## GitHub Guardrails
 

@@ -8,6 +8,7 @@ import type { ImplementationExecutionResult, ImplementationProposal } from "../.
 import {
   createAgentOfficeApp,
   type ApprovedImplementationWriter,
+  type ImplementationReadyTaskScanner,
   type ImplementationWorkflowRunner,
   type ReadyCodexTaskScanner,
 } from "../../src/server/app.js";
@@ -19,6 +20,12 @@ const approvalSecret = "test-approval-secret";
 const authHeaders = { "x-agent-office-api-key": apiKey };
 const pageId = "22222222-2222-2222-2222-222222222222";
 const targetProductRepo = "SherifHaidar/personal-chief-of-staff";
+const implementationReadyTask = {
+  name: "Design Tasks DB",
+  priority: "P0",
+  status: "In Codex",
+  taskId: pageId,
+};
 
 const architectBrief: ArchitectBrief = {
   briefTitle: "Existing architect stub",
@@ -172,9 +179,32 @@ function createReadyCodexScanner(hasCodexHandoffBrief = true) {
   };
 }
 
+function createImplementationReadyScanner(input: { loadFails?: Error } = {}) {
+  return {
+    findImplementationReadyTasks: vi
+      .fn<ImplementationReadyTaskScanner["findImplementationReadyTasks"]>()
+      .mockResolvedValue([implementationReadyTask]),
+    loadApprovedCodexHandoff: vi
+      .fn<ImplementationReadyTaskScanner["loadApprovedCodexHandoff"]>()
+      .mockImplementation(async () => {
+        if (input.loadFails) {
+          throw input.loadFails;
+        }
+
+        return {
+          handoff,
+          status: "In Codex",
+          taskId: pageId,
+          taskName: implementationReadyTask.name,
+        };
+      }),
+  };
+}
+
 function createTestApp(
   input: {
     implementationWorkflow?: ReturnType<typeof createImplementationWorkflow>;
+    implementationReadyScanner?: ReturnType<typeof createImplementationReadyScanner>;
     implementationWriter?: ReturnType<typeof createImplementationWriter>;
     readyCodexScanner?: ReturnType<typeof createReadyCodexScanner>;
     runLog?: InMemoryRunLog;
@@ -187,6 +217,7 @@ function createTestApp(
     approvedCodexHandoffWriter: { writeApprovedHandoff: vi.fn() },
     approvedImplementationWriter: input.implementationWriter ?? createImplementationWriter(executionSuccess()),
     codexHandoffWorkflow: { run: vi.fn() },
+    implementationReadyScanner: input.implementationReadyScanner ?? createImplementationReadyScanner(),
     implementationWorkflow: input.implementationWorkflow ?? createImplementationWorkflow(previewSuccess()),
     readyArchitectureScanner: {
       findReadyForArchitectureTasks: vi.fn().mockResolvedValue([]),
@@ -202,6 +233,23 @@ function createTestApp(
 }
 
 describe("Controlled Implementation API", () => {
+  it("lists implementation-ready In Codex tasks with approved handoffs", async () => {
+    const implementationReadyScanner = createImplementationReadyScanner();
+    const app = createTestApp({ implementationReadyScanner });
+
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "GET",
+      url: "/agent-office/tasks/implementation-ready",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(implementationReadyScanner.findImplementationReadyTasks).toHaveBeenCalledOnce();
+    expect(response.json()).toEqual({ ok: true, tasks: [implementationReadyTask] });
+
+    await app.close();
+  });
+
   it("previews an exact implementation proposal after Codex Handoff writeback", async () => {
     const implementationWorkflow = createImplementationWorkflow(previewSuccess());
     const readyCodexScanner = createReadyCodexScanner(true);
@@ -250,6 +298,57 @@ describe("Controlled Implementation API", () => {
       taskId: pageId,
     });
     expect(body.approval.previewRunId).toBe(body.run.runId);
+    expect(runLog.records).toEqual([body.run]);
+
+    await app.close();
+  });
+
+  it("previews controlled implementation from a persisted In Codex handoff without a handoff token", async () => {
+    const implementationWorkflow = createImplementationWorkflow(previewSuccess());
+    const implementationReadyScanner = createImplementationReadyScanner();
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({ implementationReadyScanner, implementationWorkflow, runLog });
+
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: { taskId: pageId },
+      url: "/agent-office/github/implementation",
+    });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(implementationReadyScanner.loadApprovedCodexHandoff).toHaveBeenCalledWith(pageId);
+    expect(implementationWorkflow.preview).toHaveBeenCalledWith({
+      payload: expect.objectContaining({
+        action: "codex-handoff-writeback",
+        handoff,
+        previewRunId: expect.stringMatching(/^notion-handoff:/),
+        targetProductRepo,
+        taskId: pageId,
+        taskName: "Design Tasks DB",
+      }),
+    });
+    expect(body).toMatchObject({
+      approval: {
+        action: "implementation-branch-draft-pr",
+        token: expect.any(String),
+      },
+      dryRun: true,
+      implementationProposalGenerated: true,
+      ok: true,
+      proposal,
+      run: {
+        dryRun: true,
+        notionWriteback: false,
+        outcome: "succeeded",
+        statusUpdated: false,
+        taskId: pageId,
+        taskName: "Design Tasks DB",
+        workflow: "implementation",
+      },
+      taskId: pageId,
+    });
     expect(runLog.records).toEqual([body.run]);
 
     await app.close();

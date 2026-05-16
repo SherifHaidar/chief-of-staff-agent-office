@@ -18,6 +18,10 @@
       "destination": "/api/agent-office/tasks/ready-for-codex"
     },
     {
+      "source": "/agent-office/tasks/implementation-ready",
+      "destination": "/api/agent-office/tasks/implementation-ready"
+    },
+    {
       "source": "/agent-office/architect-review",
       "destination": "/api/agent-office/architect-review"
     },
