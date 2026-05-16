@@ -6,6 +6,8 @@ import { createConfiguredAgentOfficeApp } from "./create-configured-app.js";
 const VERCEL_RUN_LOG_PATH = "/tmp/agent-office-run-log.jsonl";
 
 type InjectHttpMethod = "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT";
+type RequestHeaderMap = Record<string, string | string[] | number | undefined>;
+type RequestHeaderSource = Headers | RequestHeaderMap;
 
 let appPromise: Promise<FastifyInstance> | undefined;
 
@@ -37,11 +39,44 @@ export function toFastifyInjectUrl(requestUrl: string, routePath: string): strin
   return `${routePath}${url.search}`;
 }
 
-function toRequestHeaders(headers: Headers): Record<string, string> {
-  const requestHeaders: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    requestHeaders[key] = value;
-  });
+function isFetchHeaders(headers: RequestHeaderSource): headers is Headers {
+  return typeof (headers as Headers).forEach === "function";
+}
+
+export function toRequestHeaders(headers: RequestHeaderSource | undefined): Record<string, string | string[]> {
+  const requestHeaders: Record<string, string | string[]> = {};
+
+  if (!headers) {
+    return requestHeaders;
+  }
+
+  if (isFetchHeaders(headers)) {
+    headers.forEach((value, key) => {
+      requestHeaders[key.toLowerCase()] = value;
+    });
+
+    return requestHeaders;
+  }
+
+  for (const [rawKey, rawValue] of Object.entries(headers)) {
+    if (rawValue === undefined) {
+      continue;
+    }
+
+    const key = rawKey.toLowerCase();
+
+    if (Array.isArray(rawValue)) {
+      const values = rawValue.map(String);
+      if (values.length === 1) {
+        requestHeaders[key] = values[0];
+      } else if (values.length > 1) {
+        requestHeaders[key] = values;
+      }
+      continue;
+    }
+
+    requestHeaders[key] = String(rawValue);
+  }
 
   return requestHeaders;
 }
