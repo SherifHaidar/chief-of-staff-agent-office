@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { toFastifyInjectUrl } from "../../src/server/vercel-adapter.js";
+import implementationRoute from "../../api/agent-office/github/implementation.js";
+import implementationApproveRoute from "../../api/agent-office/github/implementation/approve.js";
+import { toFastifyInjectUrl, toRequestHeaders } from "../../src/server/vercel-adapter.js";
 
 type VercelConfig = {
   rewrites: Array<{ destination: string; source: string }>;
@@ -62,6 +64,37 @@ describe("Vercel adapter", () => {
     expect(toFastifyInjectUrl("https://agent-office.example.com/api/health?check=smoke", "/health")).toBe(
       "/health?check=smoke",
     );
+  });
+
+  it("converts Fetch Headers for Fastify injection", () => {
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    headers.set("X-Agent-Office-Api-Key", "office-key");
+
+    expect(toRequestHeaders(headers)).toEqual({
+      "content-type": "application/json",
+      "x-agent-office-api-key": "office-key",
+    });
+  });
+
+  it("converts plain Vercel and Node header maps for Fastify injection", () => {
+    expect(
+      toRequestHeaders({
+        "Content-Type": "application/json",
+        "X-Agent-Office-Api-Key": "office-key",
+        "x-forwarded-for": ["203.0.113.10", "198.51.100.5"],
+        "x-vercel-id": undefined,
+      }),
+    ).toEqual({
+      "content-type": "application/json",
+      "x-agent-office-api-key": "office-key",
+      "x-forwarded-for": ["203.0.113.10", "198.51.100.5"],
+    });
+  });
+
+  it("exports Fetch route wrappers for controlled implementation functions", () => {
+    expect(implementationRoute).toEqual(expect.objectContaining({ fetch: expect.any(Function) }));
+    expect(implementationApproveRoute).toEqual(expect.objectContaining({ fetch: expect.any(Function) }));
   });
 
   it("declares explicit Vercel rewrites for every production route", () => {
