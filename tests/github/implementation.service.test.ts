@@ -115,6 +115,75 @@ describe("ImplementationService", () => {
     ).toThrow(ImplementationProposalPolicyError);
   });
 
+  it("allows .env.example as a template documentation file", () => {
+    const service = createService();
+
+    expect(
+      service.finalizeProposal({
+        payload,
+        proposal: {
+          ...proposal,
+          changedFiles: [
+            {
+              action: "update",
+              content: "NOTION_TASKS_DATABASE_ID=\n",
+              path: ".env.example",
+              summary: "Document the Tasks DB environment variable.",
+            },
+          ],
+        },
+        shell: {
+          baseBranch: "main",
+          baseCommitSha: "base-sha",
+          branchName: "agent-office/impl-improve-task-capture-22222222",
+          repository: "SherifHaidar/personal-chief-of-staff",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+      }).changedFiles,
+    ).toEqual([
+      {
+        action: "update",
+        content: "NOTION_TASKS_DATABASE_ID=\n",
+        path: ".env.example",
+        summary: "Document the Tasks DB environment variable.",
+      },
+    ]);
+  });
+
+  it("still rejects real env and secret paths", () => {
+    const service = createService();
+    const protectedPaths = [
+      ".env",
+      ".env.local",
+      ".env.production",
+      "config/.env",
+      "config/.env.example",
+      "secrets/notion.txt",
+      "config/secrets/notion.txt",
+      "private.pem",
+      "private.key",
+    ];
+
+    for (const path of protectedPaths) {
+      expect(() =>
+        service.finalizeProposal({
+          payload,
+          proposal: {
+            ...proposal,
+            changedFiles: [{ ...proposal.changedFiles[0]!, path }],
+          },
+          shell: {
+            baseBranch: "main",
+            baseCommitSha: "base-sha",
+            branchName: "agent-office/impl-improve-task-capture-22222222",
+            repository: "SherifHaidar/personal-chief-of-staff",
+            taskId: "22222222-2222-2222-2222-222222222222",
+          },
+        }),
+      ).toThrow(ImplementationProposalPolicyError);
+    }
+  });
+
   it("requires a task name when finalizing an implementation proposal", () => {
     const service = createService();
     const { taskName: _payloadTaskName, ...payloadWithoutTaskName } = payload;
