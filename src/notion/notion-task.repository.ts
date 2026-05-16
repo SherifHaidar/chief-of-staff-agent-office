@@ -6,6 +6,7 @@ import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js"
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
+import { parseLatestCodexHandoffBrief } from "./codex-handoff-brief-parser.js";
 import {
   chunkBlocks,
   renderArchitectBriefBlocks,
@@ -26,6 +27,22 @@ type QueryDatabaseResponse = {
   next_cursor?: string | null;
   results?: unknown[];
 };
+
+export type ApprovedCodexHandoffResume = {
+  handoff: CodexHandoffBrief;
+  status?: string;
+  taskId: string;
+  taskName: string;
+};
+
+export class ImplementationReadyTaskError extends Error {
+  readonly statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ImplementationReadyTaskError";
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -191,6 +208,19 @@ export class NotionTaskRepository {
     return this.findTasksByStatus(input);
   }
 
+  async findImplementationReadyTasks(input: { databaseId: string; statusName: string }): Promise<ReadyArchitectureTask[]> {
+    const tasks = await this.findTasksByStatus(input);
+    const implementationReadyTasks: ReadyArchitectureTask[] = [];
+
+    for (const task of tasks) {
+      if (await this.hasCodexHandoffBrief(task.taskId)) {
+        implementationReadyTasks.push(task);
+      }
+    }
+
+    return implementationReadyTasks;
+  }
+
   async hasArchitectBrief(pageId: string): Promise<boolean> {
     const task = await this.fetchTask(pageId);
 
@@ -201,6 +231,32 @@ export class NotionTaskRepository {
     const task = await this.fetchTask(pageId);
 
     return task.contentMarkdown.includes("Codex Handoff Brief:");
+  }
+
+  async loadApprovedCodexHandoffForImplementation(input: {
+    pageId: string;
+    statusName: string;
+  }): Promise<ApprovedCodexHandoffResume> {
+    const task = await this.fetchTask(input.pageId);
+
+    if (task.status !== input.statusName) {
+      throw new ImplementationReadyTaskError(
+        `Task must be ${input.statusName} before controlled implementation. Current status: ${task.status ?? "unknown"}.`,
+      );
+    }
+
+    if (!task.contentMarkdown.includes("Codex Handoff Brief:")) {
+      throw new ImplementationReadyTaskError(
+        "Codex Handoff Brief must be approved and written to Notion before controlled implementation.",
+      );
+    }
+
+    return {
+      handoff: parseLatestCodexHandoffBrief(task.contentMarkdown),
+      status: task.status,
+      taskId: task.pageId,
+      taskName: task.title,
+    };
   }
 
   async appendArchitectBrief(

@@ -12,10 +12,11 @@ The page is public as a shell. It does not embed secrets or task data. Every ope
 
 ## Desk Modes
 
-The console supports two desk modes:
+The console supports three desk modes:
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, optionally revise the preview through feedback rounds, approve exact writeback, then move Status to `Ready for Codex`.
-- Implementation Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then optionally preview and approve GitHub Draft PR Prep or Controlled Implementation.
+- Codex Handoff Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then move Status to `In Codex`.
+- Implementation Ready: list `In Codex` tasks that already contain an approved `Codex Handoff Brief:` marker, then preview and approve Controlled Implementation.
 
 Preview cards show whether the shared Product Context Pack was included. This tells the operator whether the agent used Notion product context and bounded GitHub repo context before generating the brief or handoff.
 
@@ -43,17 +44,13 @@ List Ready for Codex tasks
   -> approve signed preview token
   -> append exact approved handoff to Notion
   -> update Status to In Codex
-  -> preview GitHub Draft PR Proposal
-  -> review exact branch/file/PR proposal
-  -> approve signed GitHub proposal token
-  -> create branch, commit handoff file, open draft PR
-  -> append GitHub result to Notion
 ```
 
 ## Controlled Implementation Flow
 
 ```text
-Approved Codex Handoff Brief
+List In Codex tasks with approved Codex Handoff Brief markers
+  -> load persisted handoff from Notion
   -> preview Controlled Implementation Proposal
   -> review exact proposed files and task-specific verification plan
   -> approve separate signed implementation token
@@ -64,7 +61,7 @@ Approved Codex Handoff Brief
   -> append implementation result to Notion
 ```
 
-Approving the Codex Handoff Brief does not start coding. The implementation lane has its own approval token that signs the exact file changes.
+Approving the Codex Handoff Brief does not start coding. The implementation lane has its own approval token that signs the exact file changes. Loading a persisted Notion handoff is a v0 resume/recovery path; a durable structured proposal store can replace parser-based resume later.
 
 ## Approval Token Contract
 

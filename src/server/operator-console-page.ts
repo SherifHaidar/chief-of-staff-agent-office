@@ -83,7 +83,8 @@ export function renderOperatorConsolePage(): string {
           <label for="deskMode">Desk</label>
           <select id="deskMode">
             <option value="architecture">Architecture Desk</option>
-            <option value="implementation">Implementation Desk</option>
+            <option value="codexHandoff">Codex Handoff Desk</option>
+            <option value="implementationReady">Implementation Ready</option>
           </select>
         </div>
         <div>
@@ -142,6 +143,7 @@ export function renderOperatorConsolePage(): string {
         approveEndpoint: "/agent-office/architect-review/approve",
         artifactKey: "brief",
         hashKey: "briefHash",
+        previewButtonLabel: "Preview",
         previewEndpoint: "/agent-office/architect-review",
         previewTitle: "Architect Brief Preview",
         readyLabel: "Ready for Architecture",
@@ -149,15 +151,23 @@ export function renderOperatorConsolePage(): string {
         taskEndpoint: "/agent-office/tasks/ready-for-architecture",
         workflowName: "Architecture Desk"
       },
-      implementation: {
+      codexHandoff: {
         approveEndpoint: "/agent-office/codex-handoff/approve",
         artifactKey: "handoff",
         hashKey: "handoffHash",
+        previewButtonLabel: "Preview handoff",
         previewEndpoint: "/agent-office/codex-handoff",
         previewTitle: "Codex Handoff Preview",
         readyLabel: "Ready for Codex",
         taskEndpoint: "/agent-office/tasks/ready-for-codex",
-        workflowName: "Implementation Desk"
+        workflowName: "Codex Handoff Desk"
+      },
+      implementationReady: {
+        previewButtonLabel: "Preview implementation",
+        previewTitle: "Controlled Implementation Preview",
+        readyLabel: "In Codex / Implementation Ready",
+        taskEndpoint: "/agent-office/tasks/implementation-ready",
+        workflowName: "Implementation Ready"
       }
     };
 
@@ -176,6 +186,11 @@ export function renderOperatorConsolePage(): string {
       selectedTask: null,
       tasks: []
     };
+
+    if (state.mode === "implementation") {
+      state.mode = "codexHandoff";
+      sessionStorage.setItem("agentOfficeDeskMode", state.mode);
+    }
 
     const apiKeyInput = document.getElementById("apiKey");
     const approveButton = document.getElementById("approveButton");
@@ -210,6 +225,28 @@ export function renderOperatorConsolePage(): string {
 
     function activeDesk() {
       return desks[state.mode];
+    }
+
+    function isArchitectureMode() {
+      return state.mode === "architecture";
+    }
+
+    function isCodexHandoffMode() {
+      return state.mode === "codexHandoff";
+    }
+
+    function isImplementationReadyMode() {
+      return state.mode === "implementationReady";
+    }
+
+    function syncControlsForMode() {
+      previewButton.hidden = isImplementationReadyMode();
+      approveButton.hidden = isImplementationReadyMode();
+      githubPreviewButton.hidden = !isCodexHandoffMode();
+      githubApproveButton.hidden = !isCodexHandoffMode();
+      implementationPreviewButton.hidden = !isImplementationReadyMode();
+      implementationApproveButton.hidden = !isImplementationReadyMode();
+      previewButton.textContent = activeDesk().previewButtonLabel;
     }
 
     function setStatus(element, message, type) {
@@ -254,14 +291,11 @@ export function renderOperatorConsolePage(): string {
       state.tasks = [];
       selectedTaskTitle.textContent = desk.previewTitle;
       selectedTaskMeta.textContent = "No task selected";
+      syncControlsForMode();
       previewButton.disabled = true;
       approveButton.disabled = true;
       approvalPanel.hidden = true;
       result.hidden = true;
-      githubPreviewButton.hidden = state.mode !== "implementation";
-      githubApproveButton.hidden = state.mode !== "implementation";
-      implementationPreviewButton.hidden = state.mode !== "implementation";
-      implementationApproveButton.hidden = state.mode !== "implementation";
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
       implementationPreviewButton.disabled = true;
@@ -305,11 +339,12 @@ export function renderOperatorConsolePage(): string {
       state.revisionNumber = 0;
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
-      previewButton.disabled = false;
+      syncControlsForMode();
+      previewButton.disabled = isImplementationReadyMode();
       approveButton.disabled = true;
       githubPreviewButton.disabled = true;
       githubApproveButton.disabled = true;
-      implementationPreviewButton.disabled = true;
+      implementationPreviewButton.disabled = !isImplementationReadyMode();
       implementationApproveButton.disabled = true;
       approvalPanel.hidden = true;
       revisionFeedback.value = "";
@@ -321,7 +356,7 @@ export function renderOperatorConsolePage(): string {
     }
 
     function renderArtifact(artifact) {
-      if (state.mode === "implementation") {
+      if (isCodexHandoffMode()) {
         renderCodexHandoff(artifact);
         return;
       }
@@ -506,7 +541,7 @@ export function renderOperatorConsolePage(): string {
         implementationPreviewButton.disabled = true;
         implementationApproveButton.disabled = true;
         setStatus(previewStatus, "Generating preview...");
-        const body = state.mode === "architecture"
+        const body = isArchitectureMode()
           ? { taskId: state.selectedTask.taskId, dryRun: true }
           : { taskId: state.selectedTask.taskId };
         const payload = await agentFetch(desk.previewEndpoint, {
@@ -516,7 +551,7 @@ export function renderOperatorConsolePage(): string {
         });
         state.approval = payload.approval;
         state.artifact = payload[desk.artifactKey];
-        state.codexHandoffApprovalToken = state.mode === "implementation" ? payload.approval.token : null;
+        state.codexHandoffApprovalToken = isCodexHandoffMode() ? payload.approval.token : null;
         state.githubApproval = null;
         state.githubProposal = null;
         state.implementationApproval = null;
@@ -527,8 +562,8 @@ export function renderOperatorConsolePage(): string {
         briefHash.textContent = "v" + state.revisionNumber + " Hash " + payload.approval[desk.hashKey].slice(0, 12);
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
         approvalPanel.hidden = false;
-        revisionPanel.hidden = state.mode !== "architecture";
-        reviseButton.disabled = state.mode !== "architecture";
+        revisionPanel.hidden = !isArchitectureMode();
+        reviseButton.disabled = !isArchitectureMode();
         approveButton.disabled = false;
         setStatus(previewStatus, "Preview ready.", "ok");
         showResult(payload.run);
@@ -540,7 +575,7 @@ export function renderOperatorConsolePage(): string {
     });
 
     reviseButton.addEventListener("click", async function () {
-      if (!state.selectedTask || !state.approval || state.mode !== "architecture") {
+      if (!state.selectedTask || !state.approval || !isArchitectureMode()) {
         return;
       }
 
@@ -599,9 +634,8 @@ export function renderOperatorConsolePage(): string {
         });
         setStatus(previewStatus, "Writeback complete.", "ok");
         showResult(payload);
-        if (state.mode === "implementation") {
+        if (isCodexHandoffMode()) {
           githubPreviewButton.disabled = false;
-          implementationPreviewButton.disabled = false;
         }
       } catch (error) {
         approveButton.disabled = false;
@@ -660,7 +694,7 @@ export function renderOperatorConsolePage(): string {
     });
 
     implementationPreviewButton.addEventListener("click", async function () {
-      if (!state.codexHandoffApprovalToken) {
+      if (!state.selectedTask) {
         return;
       }
 
@@ -671,7 +705,11 @@ export function renderOperatorConsolePage(): string {
         const payload = await agentFetch("/agent-office/github/implementation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codexHandoffApprovalToken: state.codexHandoffApprovalToken })
+          body: JSON.stringify(
+            state.codexHandoffApprovalToken
+              ? { codexHandoffApprovalToken: state.codexHandoffApprovalToken }
+              : { taskId: state.selectedTask.taskId }
+          )
         });
         state.implementationApproval = payload.approval;
         state.implementationProposal = payload.proposal;

@@ -1,9 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { CodexHandoffBrief } from "../src/domain/codex-handoff-brief.js";
+import { renderCodexHandoffBriefBlocks } from "../src/notion/notion-block-renderer.js";
 import { NotionTaskRepository } from "../src/notion/notion-task.repository.js";
 import type { NotionClientLike } from "../src/notion/notion-types.js";
 
 const pageId = "22222222-2222-2222-2222-222222222222";
+const secondPageId = "33333333-3333-3333-3333-333333333333";
+
+const handoff: CodexHandoffBrief = {
+  acceptanceChecklist: ["Tasks DB receives the row."],
+  constraints: ["Do not merge or deploy automatically."],
+  explicitApprovalWarnings: ["Merge requires Sherif approval.", "Deployment requires Sherif approval."],
+  implementationScope: ["Implement the smallest Tasks DB write path."],
+  implementationSteps: ["Inspect capture", "Implement", "Test"],
+  likelyAffectedFiles: ["lib/notion.ts"],
+  problemSummary: "Weekly To-do insertion needs a durable replacement.",
+  productIntent: "Make task capture queryable.",
+  suggestedBranchName: "codex/tasks-db-v0",
+  suggestedPrBody: "## Summary\n- Add Tasks DB write path",
+  suggestedPrTitle: "Design Tasks DB",
+  targetProductRepo: "SherifHaidar/personal-chief-of-staff",
+  testsToRun: ["npm test"],
+};
 
 function createClient(overrides: Partial<NotionClientLike> = {}): NotionClientLike {
   return {
@@ -112,5 +131,145 @@ describe("NotionTaskRepository ready architecture scanning", () => {
     const repository = createRepository(client);
 
     await expect(repository.hasArchitectBrief(pageId)).resolves.toBe(true);
+  });
+
+  it("lists only In Codex tasks with an approved Codex Handoff marker as implementation-ready", async () => {
+    const query = vi.fn().mockResolvedValue({
+      results: [
+        {
+          id: pageId,
+          properties: {
+            Name: {
+              title: [{ plain_text: "Design Tasks DB" }],
+              type: "title",
+            },
+            Status: {
+              status: { name: "In Codex" },
+              type: "status",
+            },
+          },
+        },
+        {
+          id: secondPageId,
+          properties: {
+            Name: {
+              title: [{ plain_text: "Missing handoff" }],
+              type: "title",
+            },
+            Status: {
+              status: { name: "In Codex" },
+              type: "status",
+            },
+          },
+        },
+      ],
+    });
+    const list = vi.fn().mockImplementation(({ block_id }: { block_id: string }) =>
+      Promise.resolve({
+        results:
+          block_id === pageId
+            ? [{ heading_2: { rich_text: [{ plain_text: "Codex Handoff Brief: Design Tasks DB" }] }, type: "heading_2" }]
+            : [{ paragraph: { rich_text: [{ plain_text: "No handoff yet." }] }, type: "paragraph" }],
+      }),
+    );
+    const client = createClient({
+      blocks: { children: { append: vi.fn().mockResolvedValue({}), list } },
+      databases: { query },
+      pages: {
+        retrieve: vi.fn().mockResolvedValue({ properties: {} }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    });
+    const repository = createRepository(client);
+
+    const tasks = await repository.findImplementationReadyTasks({
+      databaseId: "database-id",
+      statusName: "In Codex",
+    });
+
+    expect(tasks).toEqual([
+      {
+        name: "Design Tasks DB",
+        status: "In Codex",
+        taskId: pageId,
+      },
+    ]);
+  });
+
+  it("loads the approved Codex Handoff for an implementation-ready task", async () => {
+    const client = createClient({
+      blocks: {
+        children: {
+          append: vi.fn().mockResolvedValue({}),
+          list: vi.fn().mockResolvedValue({
+            results: renderCodexHandoffBriefBlocks(handoff, new Date("2026-05-16T12:00:00.000Z")),
+          }),
+        },
+      },
+      pages: {
+        retrieve: vi.fn().mockResolvedValue({
+          properties: {
+            Name: {
+              title: [{ plain_text: "Design Tasks DB" }],
+              type: "title",
+            },
+            Status: {
+              status: { name: "In Codex" },
+              type: "status",
+            },
+          },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    });
+    const repository = createRepository(client);
+
+    await expect(
+      repository.loadApprovedCodexHandoffForImplementation({
+        pageId,
+        statusName: "In Codex",
+      }),
+    ).resolves.toEqual({
+      handoff,
+      status: "In Codex",
+      taskId: pageId,
+      taskName: "Design Tasks DB",
+    });
+  });
+
+  it("rejects handoff resume when the task is not In Codex", async () => {
+    const client = createClient({
+      blocks: {
+        children: {
+          append: vi.fn().mockResolvedValue({}),
+          list: vi.fn().mockResolvedValue({
+            results: renderCodexHandoffBriefBlocks(handoff, new Date("2026-05-16T12:00:00.000Z")),
+          }),
+        },
+      },
+      pages: {
+        retrieve: vi.fn().mockResolvedValue({
+          properties: {
+            Name: {
+              title: [{ plain_text: "Design Tasks DB" }],
+              type: "title",
+            },
+            Status: {
+              status: { name: "Ready for Codex" },
+              type: "status",
+            },
+          },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    });
+    const repository = createRepository(client);
+
+    await expect(
+      repository.loadApprovedCodexHandoffForImplementation({
+        pageId,
+        statusName: "In Codex",
+      }),
+    ).rejects.toThrow("Task must be In Codex before controlled implementation. Current status: Ready for Codex.");
   });
 });

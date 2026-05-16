@@ -110,15 +110,17 @@ The dashboard should stay human-readable and operational. It should not become t
 
 ### Controlled Implementation
 
-1. Require an approved Codex Handoff Brief marker on the task page.
-2. Generate a Controlled Implementation Proposal from the task, approved handoff token, Product Context Pack, and task page content.
-3. Preview exact proposed file paths, replacement contents, PR text, and task-specific verification plan.
-4. Require separate signed implementation approval before writing product code.
-5. On approval, create or update an allowlisted implementation branch and draft PR.
-6. Commit only the exact approved file changes.
-7. Capture available GitHub check/status evidence.
-8. Append `Controlled Implementation Draft PR:` blocks to the same Notion task page with PR URL, branch, commit SHA, files changed, verification plan, evidence, and gaps.
-9. Do not update task status automatically after implementation PR creation in v0.
+1. Read implementation-ready tasks where `Status = In Codex`.
+2. Require an approved Codex Handoff Brief marker on the task page.
+3. Load the persisted Codex Handoff Brief from the Notion writeback as a v0 resume/recovery path.
+4. Generate a Controlled Implementation Proposal from the task, approved handoff content, Product Context Pack, and task page content.
+5. Preview exact proposed file paths, replacement contents, PR text, and task-specific verification plan.
+6. Require separate signed implementation approval before writing product code.
+7. On approval, create or update an allowlisted implementation branch and draft PR.
+8. Commit only the exact approved file changes.
+9. Capture available GitHub check/status evidence.
+10. Append `Controlled Implementation Draft PR:` blocks to the same Notion task page with PR URL, branch, commit SHA, files changed, verification plan, evidence, and gaps.
+11. Do not update task status automatically after implementation PR creation in v0.
 
 Required safety rules:
 
@@ -181,6 +183,8 @@ The Agent Office currently supports:
 - Running the Implementation Desk / Codex Handoff workflow.
 - Appending approved Codex Handoff Briefs back to the same task page.
 - Moving successfully processed handoffs to `In Codex`.
+- Scanning implementation-ready `In Codex` tasks that already contain an approved Codex Handoff Brief marker.
+- Resuming Controlled Implementation previews from the persisted Notion Codex Handoff Brief.
 - Creating approved GitHub Draft PR Prep branches and draft PRs with handoff files.
 - Creating separately approved implementation branches and draft PRs with exact approved product file changes.
 - Capturing task-specific verification plans and available GitHub check evidence for implementation PRs.

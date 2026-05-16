@@ -2,12 +2,13 @@
 
 The Implementation Desk is the Agent Office layer after Architecture. It turns a Notion task that is already `Ready for Codex` into implementation-ready work for the Chief of Staff product repo.
 
-It now has two controlled stages:
+It now has three controlled stages:
 
 1. Generate and approve a Codex Handoff Brief.
 2. From that approved handoff, preview and approve a GitHub Draft PR Prep action.
+3. From an `In Codex` task with an approved handoff, preview and approve Controlled Implementation.
 
-It still does not edit product code, merge, deploy, or change repository settings/secrets.
+Codex Handoff approval still does not edit product code, merge, deploy, or change repository settings/secrets. Controlled Implementation can edit product code only after its separate exact proposal approval.
 
 ## Flow
 
@@ -24,6 +25,17 @@ Ready for Codex task
   -> commit .agent-office/handoffs/<notion-task-id>.md
   -> open draft PR against main
   -> append GitHub PR result to the Notion task
+```
+
+```text
+In Codex task with Codex Handoff Brief marker
+  -> load the persisted handoff from Notion
+  -> preview Controlled Implementation Proposal
+  -> human approves the signed implementation proposal
+  -> create/update allowlisted implementation branch
+  -> commit exact approved product file changes
+  -> open/update draft PR against main
+  -> append implementation PR/evidence result to the Notion task
 ```
 
 ## Codex Handoff Brief Contents
@@ -54,6 +66,8 @@ Codex Handoff approval writes the exact handoff embedded in the token. It must n
 
 GitHub Draft PR approval writes the exact GitHub proposal embedded in the token. It must not regenerate the proposal, change branch names, change file content, or alter PR text during execution.
 
+Controlled Implementation approval writes the exact implementation proposal embedded in the token. Resuming from a persisted Notion handoff is a v0 recovery path for tasks already in `In Codex`; it should be replaced by a durable structured proposal store later.
+
 ## Notion Write Contract
 
 The Implementation Desk may write to Notion only after approved actions:
@@ -70,21 +84,21 @@ If writeback fails, status must not advance. If the task page already contains a
 GET /agent-office/tasks/ready-for-codex
 POST /agent-office/codex-handoff
 POST /agent-office/codex-handoff/approve
+GET /agent-office/tasks/implementation-ready
 POST /agent-office/github/draft-pr
 POST /agent-office/github/draft-pr/approve
+POST /agent-office/github/implementation
+POST /agent-office/github/implementation/approve
 ```
 
 All routes require `x-agent-office-api-key`.
 
 ## Operator Console
 
-`GET /office` has two desk modes:
+`GET /office` has three desk modes:
 
 - Architecture Desk: `Ready for Architecture` -> Architect Brief -> `Ready for Codex`
-- Implementation Desk: `Ready for Codex` -> Codex Handoff Brief -> `In Codex` -> GitHub Draft PR Prep
+- Codex Handoff Desk: `Ready for Codex` -> Codex Handoff Brief -> `In Codex`
+- Implementation Ready: `In Codex` + `Codex Handoff Brief:` -> Controlled Implementation Preview -> Implementation Draft PR
 
-Both modes use preview -> approve -> exact execution.
-
-## Next Extension
-
-The next implementation step can allow Codex to prepare a real code diff on an Agent Office branch, still using previewed diffs and approval gates before pushing commits.
+All modes use preview -> approve -> exact execution.
