@@ -1289,7 +1289,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
     return reply.send({
       approval,
       dryRun: true,
-      implementationProposalGenerated: true,
+      implementationWorkOrderGenerated: true,
       ok: true,
       proposal: result.proposal,
       run,
@@ -1356,7 +1356,7 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       },
       dryRun: false,
       github: result.github,
-      implementationCreated: true,
+      implementationWorkOrderPrCreated: true,
       ok: true,
       run,
       taskId: result.pageId,

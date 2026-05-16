@@ -70,6 +70,10 @@ Design Tasks DB
 ### Merge / Deploy Approval Warnings
 - Merge requires Sherif approval.
 - Deployment requires Sherif approval.
+
+## Implementation Work-Order Draft PR: #55
+### Tests to Run
+- This later work-order result must not be parsed as part of the handoff.
 `);
 
     expect(handoff).toEqual({

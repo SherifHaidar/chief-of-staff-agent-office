@@ -1,29 +1,45 @@
 # Controlled Implementation + Verification Lane v0
 
-This lane is the first Agent Office path that can move real product code in the target repository.
+This lane creates the starting point for product implementation. It does not generate product-code diffs from partial context.
 
-It is intentionally not a direct Codex runner. The deployed Agent Office does not execute an autonomous coding loop or run local tests inside the product repo. Instead, it generates an exact implementation proposal, asks Sherif to approve that exact proposal, then uses the GitHub App to create or update a scoped implementation branch and draft PR.
+The deployed Agent Office acts as the controller:
+
+- load the `In Codex` Notion task;
+- load the approved persisted `Codex Handoff Brief:`;
+- preview a deterministic implementation work order;
+- require Sherif approval for that exact work-order proposal;
+- create or update a product repo branch and draft PR;
+- commit `.agent-office/work-orders/<notion-task-id>.md`;
+- append the PR, branch, commit, and work-order path back to Notion.
+
+The resulting draft PR is explicitly marked:
+
+> Implementation pending — this is the starting point for Codex implementation, not the final deliverable.
+
+Codex implementation happens after this step, on the real product repo branch/checkout, where Codex can inspect files, edit normally, run tests, and push implementation commits.
 
 ## Flow
 
 1. A Notion task is `In Codex` and has an approved Codex Handoff Brief written back to the task page.
 2. The Operator Console lists it as Implementation Ready.
 3. The Operator Console loads the persisted Codex Handoff Brief from Notion as a v0 resume/recovery path.
-4. The Operator Console previews a Controlled Implementation Proposal.
-5. The proposal includes exact file paths and complete replacement file contents.
-6. Sherif reviews the proposed files and task-specific verification plan.
-7. A separate implementation approval token is created for the exact proposal.
+4. The Operator Console previews a deterministic implementation work-order proposal.
+5. The proposal includes repository, branch, base SHA, PR title/body, work-order path/content, task ID, and handoff summary.
+6. Sherif reviews the exact work order and draft PR text.
+7. A separate implementation approval token is created for the exact work-order proposal.
 8. Approval creates or updates an `agent-office/*` or `codex/*` branch.
-9. The Agent Office commits the exact approved file changes.
+9. The Agent Office commits only `.agent-office/work-orders/<notion-task-id>.md`.
 10. The Agent Office opens or updates a draft PR against `main`.
-11. The Agent Office captures available GitHub check/status evidence.
-12. The Agent Office appends the branch, PR, commit, changed files, verification plan, and evidence summary back to the same Notion task.
+11. The Agent Office captures available GitHub check/status evidence for the work-order commit.
+12. The Agent Office appends the branch, PR, commit, work-order path, and next action back to the same Notion task.
 
 ## Approval Boundary
 
 Approving an Architect Brief or Codex Handoff Brief does not approve coding.
 
-Coding requires a separate Controlled Implementation Proposal approval. The approval token embeds the exact implementation proposal and hashes it. If the file paths, file contents, branch, PR body, verification plan, or other proposal fields change, the old token no longer approves the new proposal.
+Approving the implementation work order does not mean product implementation is complete. It approves only the branch, draft PR, PR body, and work-order file that Codex will use as the starting point.
+
+The approval token embeds and hashes the exact work-order proposal. If repository, branch, base SHA, PR title/body, work-order path/content, task ID, or handoff summary changes, the old token no longer approves the new proposal.
 
 For v0, already-approved `In Codex` tasks can be resumed by parsing the persisted `Codex Handoff Brief:` Notion writeback. This is a recovery path for the current Office workflow, not the long-term durable proposal store.
 
@@ -31,52 +47,35 @@ For v0, already-approved `In Codex` tasks can be resumed by parsing the persiste
 
 The lane may:
 
-- read the allowlisted product repository;
+- read the allowlisted product repository base branch SHA;
 - create or update a branch with an allowed prefix;
-- commit the exact approved file changes;
+- commit the exact approved work-order file;
 - open or update a draft PR;
-- read GitHub check/status evidence for the implementation commit.
+- read GitHub check/status evidence for the work-order commit.
 
 The lane must not:
 
+- generate product-code file replacements;
+- edit product application files;
 - push to `main`, `master`, `production`, or release branches;
 - merge PRs;
 - deploy production;
 - edit repository settings, secrets, GitHub workflow files, Vercel config, lockfiles, `.env` files, or private keys;
 - create non-draft PRs;
-- treat any check result as merge approval.
+- treat the work-order PR as final implementation.
 
-## Proposal Limits
+## Verification
 
-v0 is for small, reviewable product changes.
+The work-order PR is not the verification artifact for the product change. It is the handoff point for the next Codex implementation pass.
 
-Defaults:
+After the work-order PR exists, Codex should:
 
-- `IMPLEMENTATION_MAX_CHANGED_FILES=4`
-- `IMPLEMENTATION_MAX_FILE_CHARS=16000`
-- `IMPLEMENTATION_MAX_TOTAL_CHANGE_CHARS=32000`
-
-These limits keep approval tokens and browser requests manageable and reduce the chance of broad accidental changes.
-
-## Verification Plan
-
-The verification plan must be task-specific. It is generated from:
-
-- the Notion task page, including approved Architect Brief and Codex Handoff content;
-- the approved Codex Handoff payload;
-- the Product Context Pack;
-- the exact proposed file changes;
-- the product constraints and do-not-break guidance available in context.
-
-It includes:
-
-- automated checks to rely on;
-- manual checks Sherif should perform;
-- acceptance criteria;
-- regression risks;
-- evidence to collect.
-
-The execution result captures GitHub checks/statuses available immediately after PR creation. Checks may still be pending; pending or unavailable checks are written as verification gaps, not as success.
+- check out the created branch;
+- inspect the product repo directly;
+- implement the product change in normal product files;
+- run the relevant checks from the handoff and task;
+- push implementation commits to the same PR;
+- report evidence and remaining risks for review.
 
 ## Notion Writeback
 
@@ -84,12 +83,10 @@ The Notion task receives:
 
 - draft PR link;
 - repository, branch, base branch, and base commit;
-- implementation commit SHA;
-- files changed;
-- implementation summary;
-- verification plan;
-- captured evidence;
-- context gaps;
-- explicit draft-only approval warning.
+- work-order commit SHA;
+- work-order file path;
+- approved handoff summary;
+- explicit next action for Codex;
+- explicit draft-only and implementation-pending warning.
 
 Status updates are intentionally not part of v0. The existing Notion status board remains the operating source of truth, and Sherif remains final approver for merge and deployment.

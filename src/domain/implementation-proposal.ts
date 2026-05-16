@@ -1,27 +1,27 @@
 import { z } from "zod";
 
-export const ImplementationFileChangeSchema = z
+export const IMPLEMENTATION_PENDING_NOTICE =
+  "Implementation pending — this is the starting point for Codex implementation, not the final deliverable.";
+
+export const IMPLEMENTATION_NEXT_ACTION =
+  "Codex must implement on this branch, run relevant tests, and return evidence before human merge or deploy approval.";
+
+export const ImplementationHandoffSummarySchema = z
   .object({
-    action: z.enum(["create", "update"]),
-    content: z.string().min(1),
-    path: z.string().min(1),
-    summary: z.string().min(1),
+    acceptanceChecklist: z.array(z.string().min(1)),
+    constraints: z.array(z.string().min(1)),
+    implementationScope: z.array(z.string().min(1)),
+    implementationSteps: z.array(z.string().min(1)),
+    likelyAffectedFiles: z.array(z.string().min(1)),
+    problemSummary: z.string().min(1),
+    productIntent: z.string().min(1),
+    suggestedBranchName: z.string().min(1),
+    suggestedPrTitle: z.string().min(1),
+    testsToRun: z.array(z.string().min(1)),
   })
   .strict();
 
-export type ImplementationFileChange = z.infer<typeof ImplementationFileChangeSchema>;
-
-export const TaskSpecificVerificationPlanSchema = z
-  .object({
-    acceptanceCriteria: z.array(z.string().min(1)),
-    automatedChecks: z.array(z.string().min(1)),
-    evidenceToCollect: z.array(z.string().min(1)),
-    manualChecks: z.array(z.string().min(1)),
-    regressionRisks: z.array(z.string().min(1)),
-  })
-  .strict();
-
-export type TaskSpecificVerificationPlan = z.infer<typeof TaskSpecificVerificationPlanSchema>;
+export type ImplementationHandoffSummary = z.infer<typeof ImplementationHandoffSummarySchema>;
 
 export const ImplementationProposalSchema = z
   .object({
@@ -29,17 +29,17 @@ export const ImplementationProposalSchema = z
     baseBranch: z.string().min(1),
     baseCommitSha: z.string().min(1),
     branchName: z.string().min(1),
-    changedFiles: z.array(ImplementationFileChangeSchema).min(1).max(8),
     commitMessage: z.string().min(1),
-    contextGaps: z.array(z.string().min(1)),
     draft: z.literal(true),
-    implementationSummary: z.string().min(1),
+    handoffSummary: ImplementationHandoffSummarySchema,
+    nextAction: z.string().min(1),
     prBody: z.string().min(1),
     prTitle: z.string().min(1),
     repository: z.string().min(1),
     taskId: z.string().min(1),
     taskName: z.string().min(1),
-    verificationPlan: TaskSpecificVerificationPlanSchema,
+    workOrderContent: z.string().min(1),
+    workOrderPath: z.string().min(1),
   })
   .strict();
 
@@ -57,37 +57,19 @@ export const GitHubCheckSummarySchema = z
 
 export type GitHubCheckSummary = z.infer<typeof GitHubCheckSummarySchema>;
 
-export const ImplementationEvidenceSummarySchema = z
-  .object({
-    automatedChecksSummary: z.string().min(1),
-    evidence: z.array(z.string().min(1)),
-    verificationGaps: z.array(z.string().min(1)),
-  })
-  .strict();
-
-export type ImplementationEvidenceSummary = z.infer<typeof ImplementationEvidenceSummarySchema>;
-
 export const ImplementationExecutionResultSchema = z
   .object({
     baseBranch: z.string().min(1),
     baseCommitSha: z.string().min(1),
     branchName: z.string().min(1),
-    changedFiles: z.array(
-      z
-        .object({
-          action: z.enum(["create", "update"]),
-          path: z.string().min(1),
-          summary: z.string().min(1),
-        })
-        .strict(),
-    ),
     checks: z.array(GitHubCheckSummarySchema),
     commitSha: z.string().min(1),
     draft: z.literal(true),
-    evidence: ImplementationEvidenceSummarySchema,
+    nextAction: z.string().min(1),
     pullRequestNumber: z.number().int().positive(),
     pullRequestUrl: z.string().url(),
     repository: z.string().min(1),
+    workOrderPath: z.string().min(1),
   })
   .strict();
 

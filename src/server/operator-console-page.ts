@@ -111,8 +111,8 @@ export function renderOperatorConsolePage(): string {
             <button class="primary" id="approveButton" disabled>Approve writeback</button>
             <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
             <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
-            <button id="implementationPreviewButton" hidden disabled>Preview implementation</button>
-            <button class="primary" id="implementationApproveButton" hidden disabled>Create implementation PR</button>
+            <button id="implementationPreviewButton" hidden disabled>Preview work order</button>
+            <button class="primary" id="implementationApproveButton" hidden disabled>Create work-order PR</button>
           </div>
         </div>
         <div class="status" id="previewStatus"></div>
@@ -163,7 +163,7 @@ export function renderOperatorConsolePage(): string {
         workflowName: "Codex Handoff Desk"
       },
       implementationReady: {
-        previewButtonLabel: "Preview implementation",
+        previewButtonLabel: "Preview work order",
         previewTitle: "Controlled Implementation Preview",
         readyLabel: "In Codex / Implementation Ready",
         taskEndpoint: "/agent-office/tasks/implementation-ready",
@@ -440,32 +440,26 @@ export function renderOperatorConsolePage(): string {
     }
 
     function renderImplementationProposal(proposal) {
-      const files = proposal.changedFiles.map(function (file) {
-        return '<li><strong>' + escapeHtml(file.action) + '</strong> ' + escapeHtml(file.path) + ' - ' + escapeHtml(file.summary) + '</li>';
-      }).join('');
-      const gaps = proposal.contextGaps.length === 0
-        ? '<li>None reported.</li>'
-        : proposal.contextGaps.map(function (gap) { return '<li>' + escapeHtml(gap) + '</li>'; }).join('');
-      const contents = proposal.changedFiles.map(function (file) {
-        return '<p><strong>' + escapeHtml(file.path) + '</strong></p><pre class="proposal-pre">' + escapeHtml(file.content) + '</pre>';
-      }).join('');
-
       briefPreview.innerHTML = [
         '<div class="brief-title">' + escapeHtml(proposal.prTitle) + '</div>',
+        '<p><strong>Implementation pending:</strong> this is the starting point for Codex implementation, not the final deliverable.</p>',
         '<p><strong>Repository:</strong> ' + escapeHtml(proposal.repository) + '</p>',
         '<p><strong>Base:</strong> ' + escapeHtml(proposal.baseBranch) + ' @ ' + escapeHtml(proposal.baseCommitSha) + '</p>',
         '<p><strong>Branch:</strong> ' + escapeHtml(proposal.branchName) + '</p>',
-        '<h3>Implementation Summary</h3><p>' + escapeHtml(proposal.implementationSummary) + '</p>',
-        '<h3>Proposed Files</h3><ul>' + files + '</ul>',
-        renderList('Automated Checks', proposal.verificationPlan.automatedChecks),
-        renderList('Manual Checks', proposal.verificationPlan.manualChecks),
-        renderList('Acceptance Criteria', proposal.verificationPlan.acceptanceCriteria),
-        renderList('Regression Risks', proposal.verificationPlan.regressionRisks),
-        renderList('Evidence To Collect', proposal.verificationPlan.evidenceToCollect),
-        '<h3>Context Gaps</h3><ul>' + gaps + '</ul>',
+        '<p><strong>Work order:</strong> ' + escapeHtml(proposal.workOrderPath) + '</p>',
+        '<h3>Next Action</h3><p>' + escapeHtml(proposal.nextAction) + '</p>',
+        '<h3>Approved Handoff Summary</h3>',
+        '<p><strong>Problem:</strong> ' + escapeHtml(proposal.handoffSummary.problemSummary) + '</p>',
+        '<p><strong>Product intent:</strong> ' + escapeHtml(proposal.handoffSummary.productIntent) + '</p>',
+        renderList('Implementation Scope', proposal.handoffSummary.implementationScope),
+        renderList('Likely Affected Files or Modules', proposal.handoffSummary.likelyAffectedFiles),
+        renderList('Constraints / Do Not Change', proposal.handoffSummary.constraints),
+        renderList('Implementation Steps', proposal.handoffSummary.implementationSteps),
+        renderList('Tests To Run', proposal.handoffSummary.testsToRun),
+        renderList('Acceptance Checklist', proposal.handoffSummary.acceptanceChecklist),
         '<h3>PR Body</h3><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre>',
-        '<h3>Exact File Contents</h3>' + contents,
-        '<h3>Approval Boundary</h3><p>Draft only. This will not merge, deploy, push to main, or change repo settings/secrets.</p>'
+        '<h3>Work Order Content</h3><pre class="proposal-pre">' + escapeHtml(proposal.workOrderContent) + '</pre>',
+        '<h3>Approval Boundary</h3><p>Draft only. Agent Office will commit only this work-order file. Product implementation must happen later on the created branch; this will not merge, deploy, push to main, or change repo settings/secrets.</p>'
       ].join("");
     }
 
@@ -701,7 +695,7 @@ export function renderOperatorConsolePage(): string {
       try {
         implementationPreviewButton.disabled = true;
         implementationApproveButton.disabled = true;
-        setStatus(previewStatus, "Generating controlled implementation proposal...");
+        setStatus(previewStatus, "Generating deterministic implementation work order...");
         const payload = await agentFetch("/agent-office/github/implementation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -718,7 +712,7 @@ export function renderOperatorConsolePage(): string {
         expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
         approvalPanel.hidden = false;
         implementationApproveButton.disabled = false;
-        setStatus(previewStatus, "Controlled implementation proposal ready.", "ok");
+        setStatus(previewStatus, "Implementation work order ready. Approval will create a starting-point draft PR, not finished implementation.", "ok");
         showResult(payload.run);
       } catch (error) {
         implementationPreviewButton.disabled = false;
@@ -733,13 +727,13 @@ export function renderOperatorConsolePage(): string {
 
       try {
         implementationApproveButton.disabled = true;
-        setStatus(previewStatus, "Creating approved implementation branch and draft PR...");
+        setStatus(previewStatus, "Creating approved work-order branch and draft PR...");
         const payload = await agentFetch("/agent-office/github/implementation/approve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ approvalToken: state.implementationApproval.token })
         });
-        setStatus(previewStatus, "Implementation draft PR created and linked back to Notion.", "ok");
+        setStatus(previewStatus, "Work-order draft PR created and linked back to Notion. Next action: Codex must implement on that branch.", "ok");
         showResult(payload);
       } catch (error) {
         implementationApproveButton.disabled = false;

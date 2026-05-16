@@ -5,11 +5,9 @@ import { GitHubDraftPrService } from "../github/github-draft-pr.service.js";
 import { ImplementationService } from "../github/implementation.service.js";
 import { parseCsvList } from "../github/github-policy.js";
 import {
-  createAgentRegistry,
   createArchitectTaskWorkflow,
   createCodexHandoffWorkflow,
   createNotionTaskRepository,
-  createProductContextProvider,
 } from "../index.js";
 import { consoleLogger } from "../utils/logger.js";
 import { GitHubDraftPrWorkflow } from "../workflows/github-draft-pr.workflow.js";
@@ -52,8 +50,6 @@ function createImplementationWorkflowIfConfigured(env: AppEnv, taskRepository: R
     return undefined;
   }
 
-  process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
-
   const githubClient = new GitHubAppClient({
     appId: env.GITHUB_APP_ID,
     installationId: env.GITHUB_APP_INSTALLATION_ID,
@@ -67,13 +63,10 @@ function createImplementationWorkflowIfConfigured(env: AppEnv, taskRepository: R
     maxFileChars: env.IMPLEMENTATION_MAX_FILE_CHARS,
     maxTotalChangeChars: env.IMPLEMENTATION_MAX_TOTAL_CHANGE_CHARS,
   });
-  const agents = createAgentRegistry({ model: env.OPENAI_MODEL });
 
   return new ImplementationWorkflow({
-    implementationAgent: agents.implementation,
     implementationService,
     logger: consoleLogger,
-    productContextProvider: createProductContextProvider(env),
     taskRepository,
   });
 }

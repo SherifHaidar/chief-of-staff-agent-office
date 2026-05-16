@@ -1,12 +1,12 @@
 import type { CodexHandoffApprovalPayload } from "../approval/codex-handoff-approval.js";
+import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type {
   GitHubCheckSummary,
-  ImplementationEvidenceSummary,
+  ImplementationHandoffSummary,
   ImplementationExecutionResult,
-  ImplementationFileChange,
   ImplementationProposal,
 } from "../domain/implementation-proposal.js";
-import type { ProductContextPack } from "../domain/product-context-pack.js";
+import { IMPLEMENTATION_NEXT_ACTION, IMPLEMENTATION_PENDING_NOTICE } from "../domain/implementation-proposal.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
 import { GitHubApiError, type GitHubAppClient } from "./github-app-client.js";
 import { assertAllowedRepository, assertSafeBaseBranch, assertSafeWriteBranch, slugifyBranchPart } from "./github-policy.js";
@@ -77,11 +77,6 @@ type GitHubCombinedStatusResponse = {
   }>;
 };
 
-type GitHubContentsMetadataResponse = {
-  sha?: string;
-  type?: string;
-};
-
 function parseRepository(repository: string): { owner: string; repo: string } {
   const [owner, repo] = repository.split("/");
 
@@ -110,79 +105,165 @@ function normalizePrTitle(value: string): string {
   return title.startsWith("[Draft]") ? title.slice(0, 240) : `[Draft] ${title}`.slice(0, 240);
 }
 
+function buildWorkOrderPath(taskId: string): string {
+  return `.agent-office/work-orders/${normalizeNotionPageId(taskId)}.md`;
+}
+
 function hasUnsafePathSegment(path: string): boolean {
   return path.split("/").some((segment) => !segment || segment === "." || segment === "..");
 }
 
-function isProtectedPath(path: string): boolean {
-  const lower = path.toLowerCase();
+function assertSafeWorkOrderPath(path: string, taskId: string): void {
+  const expectedPath = buildWorkOrderPath(taskId);
 
-  if (lower === ".env.example") {
-    return false;
+  if (path !== expectedPath) {
+    throw new ImplementationProposalPolicyError(`Implementation work order path must be ${expectedPath}.`);
   }
 
-  return (
-    lower.startsWith(".env") ||
-    lower.includes("/.env") ||
-    lower.startsWith(".github/") ||
-    lower.startsWith(".vercel/") ||
-    lower.startsWith("secrets/") ||
-    lower.includes("/secrets/") ||
-    lower === "vercel.json" ||
-    lower === "package.json" ||
-    lower.endsWith("lock.json") ||
-    lower.endsWith("lock.yaml") ||
-    lower.endsWith("lock.yml") ||
-    lower.endsWith(".pem") ||
-    lower.endsWith(".key")
-  );
-}
-
-function assertSafeFileChangePath(path: string): void {
   if (path.startsWith("/") || path.includes("\\") || hasUnsafePathSegment(path) || path.endsWith("/")) {
-    throw new ImplementationProposalPolicyError(`Implementation file path ${path} is not safe.`);
-  }
-
-  if (isProtectedPath(path)) {
-    throw new ImplementationProposalPolicyError(
-      `Implementation proposal may not edit protected path ${path} in v0.`,
-    );
+    throw new ImplementationProposalPolicyError(`Implementation work order path ${path} is not safe.`);
   }
 }
 
-function totalChangeChars(changes: ImplementationFileChange[]): number {
-  return changes.reduce((total, change) => total + change.content.length, 0);
+function listMarkdown(items: string[]): string {
+  return items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : "- None.";
 }
 
-function summarizeChecks(checks: GitHubCheckSummary[]): ImplementationEvidenceSummary {
-  if (checks.length === 0) {
-    return {
-      automatedChecksSummary: "No GitHub checks reported for the implementation commit yet.",
-      evidence: ["Draft PR and implementation commit were created."],
-      verificationGaps: ["Automated GitHub checks were not available yet; Sherif should refresh the PR and verify manually."],
-    };
-  }
-
-  const failed = checks.filter(
-    (check) => check.conclusion && !["success", "neutral", "skipped", "pending"].includes(check.conclusion),
-  );
-  const pending = checks.filter(
-    (check) =>
-      ["pending", "queued", "in_progress"].includes(check.status) ||
-      check.conclusion === "pending" ||
-      !check.conclusion,
-  );
-
+function handoffSummaryFromPayload(payload: CodexHandoffApprovalPayload): ImplementationHandoffSummary {
   return {
-    automatedChecksSummary:
-      failed.length > 0
-        ? `${failed.length} GitHub check(s) reported a non-success conclusion.`
-        : pending.length > 0
-          ? `${pending.length} GitHub check(s) are still pending.`
-          : "GitHub checks reported no failing conclusions at capture time.",
-    evidence: checks.map((check) => `${check.name}: ${check.conclusion ?? check.status}`),
-    verificationGaps: pending.length > 0 ? ["Some GitHub checks were still pending when evidence was captured."] : [],
+    acceptanceChecklist: payload.handoff.acceptanceChecklist,
+    constraints: payload.handoff.constraints,
+    implementationScope: payload.handoff.implementationScope,
+    implementationSteps: payload.handoff.implementationSteps,
+    likelyAffectedFiles: payload.handoff.likelyAffectedFiles,
+    problemSummary: payload.handoff.problemSummary,
+    productIntent: payload.handoff.productIntent,
+    suggestedBranchName: payload.handoff.suggestedBranchName,
+    suggestedPrTitle: payload.handoff.suggestedPrTitle,
+    testsToRun: payload.handoff.testsToRun,
   };
+}
+
+function buildPrBody(input: {
+  baseBranch: string;
+  baseCommitSha: string;
+  branchName: string;
+  handoffSummary: ImplementationHandoffSummary;
+  repository: string;
+  taskId: string;
+  taskName: string;
+  workOrderPath: string;
+}): string {
+  return [
+    "## Implementation pending",
+    IMPLEMENTATION_PENDING_NOTICE,
+    "",
+    "## What Agent Office created",
+    `- Repository: ${input.repository}`,
+    `- Base: ${input.baseBranch} @ ${input.baseCommitSha}`,
+    `- Branch: ${input.branchName}`,
+    `- Task: ${input.taskName} (${input.taskId})`,
+    `- Work order: \`${input.workOrderPath}\``,
+    "",
+    "## Next action",
+    `- ${IMPLEMENTATION_NEXT_ACTION}`,
+    "- Codex should check out this branch, inspect the product repo directly, edit the real product files, run tests, and push implementation commits to this PR.",
+    "",
+    "## Approved handoff summary",
+    `Problem: ${input.handoffSummary.problemSummary}`,
+    "",
+    `Product intent: ${input.handoffSummary.productIntent}`,
+    "",
+    "### Implementation scope",
+    listMarkdown(input.handoffSummary.implementationScope),
+    "",
+    "### Likely affected files or modules",
+    listMarkdown(input.handoffSummary.likelyAffectedFiles),
+    "",
+    "### Tests to run",
+    listMarkdown(input.handoffSummary.testsToRun),
+    "",
+    "## Approval boundary",
+    "- This draft PR is a starting point for implementation, not the final deliverable.",
+    "- Agent Office has not generated or committed product-code changes.",
+    "- This PR must not be merged or deployed until Codex implementation, review, tests, and final human approval are complete.",
+  ].join("\n");
+}
+
+function buildWorkOrderContent(input: {
+  baseBranch: string;
+  baseCommitSha: string;
+  branchName: string;
+  handoffSummary: ImplementationHandoffSummary;
+  prBody: string;
+  prTitle: string;
+  repository: string;
+  task: AiBuildTask;
+  taskId: string;
+  taskName: string;
+  workOrderPath: string;
+}): string {
+  return [
+    "# Agent Office Implementation Work Order",
+    "",
+    IMPLEMENTATION_PENDING_NOTICE,
+    "",
+    "## Task",
+    `- Task ID: ${input.taskId}`,
+    `- Task name: ${input.taskName}`,
+    `- Notion status at preview: ${input.task.status ?? "unknown"}`,
+    ...(input.task.url ? [`- Notion URL: ${input.task.url}`] : []),
+    "",
+    "## Branch and PR Starting Point",
+    `- Repository: ${input.repository}`,
+    `- Base branch: ${input.baseBranch}`,
+    `- Base commit: ${input.baseCommitSha}`,
+    `- Branch: ${input.branchName}`,
+    `- Draft PR title: ${input.prTitle}`,
+    `- Work order path: ${input.workOrderPath}`,
+    "",
+    "## Next Action",
+    IMPLEMENTATION_NEXT_ACTION,
+    "",
+    "Codex should continue on this branch, inspect the product repository directly, make the real implementation commits, run the relevant checks, and report evidence before human approval.",
+    "",
+    "## Approved Codex Handoff Summary",
+    "",
+    "### Problem Summary",
+    input.handoffSummary.problemSummary,
+    "",
+    "### Product Intent",
+    input.handoffSummary.productIntent,
+    "",
+    "### Implementation Scope",
+    listMarkdown(input.handoffSummary.implementationScope),
+    "",
+    "### Likely Affected Files or Modules",
+    listMarkdown(input.handoffSummary.likelyAffectedFiles),
+    "",
+    "### Constraints / Do Not Change",
+    listMarkdown(input.handoffSummary.constraints),
+    "",
+    "### Implementation Steps",
+    listMarkdown(input.handoffSummary.implementationSteps),
+    "",
+    "### Tests to Run",
+    listMarkdown(input.handoffSummary.testsToRun),
+    "",
+    "### Acceptance Checklist",
+    listMarkdown(input.handoffSummary.acceptanceChecklist),
+    "",
+    "## Draft PR Body",
+    "```markdown",
+    input.prBody,
+    "```",
+    "",
+    "## Approval Boundary",
+    "- Agent Office created this work-order commit only.",
+    "- Product application files still need to be implemented by Codex on this branch.",
+    "- Do not merge or deploy until implementation, review, tests, and final human approval are complete.",
+    "",
+  ].join("\n");
 }
 
 export class ImplementationService {
@@ -190,14 +271,6 @@ export class ImplementationService {
     private readonly client: GitHubAppClient,
     private readonly config: ImplementationServiceConfig,
   ) {}
-
-  limits(): Pick<ImplementationServiceConfig, "maxChangedFiles" | "maxFileChars" | "maxTotalChangeChars"> {
-    return {
-      maxChangedFiles: this.config.maxChangedFiles,
-      maxFileChars: this.config.maxFileChars,
-      maxTotalChangeChars: this.config.maxTotalChangeChars,
-    };
-  }
 
   async createProposalShell(payload: CodexHandoffApprovalPayload): Promise<{
     baseBranch: string;
@@ -222,36 +295,62 @@ export class ImplementationService {
     };
   }
 
-  finalizeProposal(input: {
+  async createWorkOrderProposal(input: {
     payload: CodexHandoffApprovalPayload;
-    productContext?: ProductContextPack;
-    proposal: ImplementationProposal;
-    shell: {
-      baseBranch: string;
-      baseCommitSha: string;
-      branchName: string;
-      repository: string;
-      taskId: string;
-    };
-  }): ImplementationProposal {
-    const taskName = input.payload.taskName ?? input.proposal.taskName;
-    if (!taskName) {
-      throw new ImplementationProposalPolicyError("Implementation proposals require a task name.");
-    }
-
-    const proposal = {
-      ...input.proposal,
-      baseBranch: input.shell.baseBranch,
-      baseCommitSha: input.shell.baseCommitSha,
-      branchName: input.shell.branchName,
-      draft: true as const,
-      prTitle: normalizePrTitle(input.proposal.prTitle),
-      repository: input.shell.repository,
-      taskId: input.shell.taskId,
+    task: AiBuildTask;
+  }): Promise<ImplementationProposal> {
+    const shell = await this.createProposalShell(input.payload);
+    const taskName = input.payload.taskName ?? input.task.title;
+    const workOrderPath = buildWorkOrderPath(shell.taskId);
+    const handoffSummary = handoffSummaryFromPayload(input.payload);
+    const prTitle = normalizePrTitle(`Implementation pending: ${input.payload.handoff.suggestedPrTitle || taskName}`);
+    const prBody = buildPrBody({
+      baseBranch: shell.baseBranch,
+      baseCommitSha: shell.baseCommitSha,
+      branchName: shell.branchName,
+      handoffSummary,
+      repository: shell.repository,
+      taskId: shell.taskId,
       taskName,
+      workOrderPath,
+    });
+    const proposal: ImplementationProposal = {
+      approvalWarnings: [
+        "Implementation pending. This draft PR is a starting point for Codex implementation, not the final deliverable.",
+        "Agent Office will commit only the work-order file. Product code changes must happen later on this branch.",
+        "Merge and deployment require separate final human approval.",
+      ],
+      baseBranch: shell.baseBranch,
+      baseCommitSha: shell.baseCommitSha,
+      branchName: shell.branchName,
+      commitMessage: `Add implementation work order for ${taskName}`.slice(0, 240),
+      draft: true,
+      handoffSummary,
+      nextAction: IMPLEMENTATION_NEXT_ACTION,
+      prBody,
+      prTitle,
+      repository: shell.repository,
+      taskId: shell.taskId,
+      taskName,
+      workOrderContent: "",
+      workOrderPath,
     };
 
-    this.assertProposalPolicy(proposal, input.productContext);
+    proposal.workOrderContent = buildWorkOrderContent({
+      baseBranch: proposal.baseBranch,
+      baseCommitSha: proposal.baseCommitSha,
+      branchName: proposal.branchName,
+      handoffSummary: proposal.handoffSummary,
+      prBody: proposal.prBody,
+      prTitle: proposal.prTitle,
+      repository: proposal.repository,
+      task: input.task,
+      taskId: proposal.taskId,
+      taskName: proposal.taskName,
+      workOrderPath: proposal.workOrderPath,
+    });
+
+    this.assertProposalPolicy(proposal);
     return proposal;
   }
 
@@ -260,9 +359,7 @@ export class ImplementationService {
     const branchExists = await this.branchExists(proposal.repository, proposal.branchName);
     const parentSha = branchExists ? await this.getBranchSha(proposal.repository, proposal.branchName) : proposal.baseCommitSha;
 
-    await this.assertFileExistenceMatchesActions(proposal, parentSha);
-
-    const commitSha = await this.commitFileChanges(proposal, parentSha);
+    const commitSha = await this.commitWorkOrder(proposal, parentSha);
 
     if (branchExists) {
       await this.updateBranch(proposal.repository, proposal.branchName, commitSha);
@@ -272,24 +369,19 @@ export class ImplementationService {
 
     const pullRequest = await this.upsertDraftPullRequest(proposal);
     const checks = await this.fetchChecks(proposal.repository, commitSha);
-    const evidence = summarizeChecks(checks);
 
     return {
       baseBranch: proposal.baseBranch,
       baseCommitSha: proposal.baseCommitSha,
       branchName: proposal.branchName,
-      changedFiles: proposal.changedFiles.map((change) => ({
-        action: change.action,
-        path: change.path,
-        summary: change.summary,
-      })),
       checks,
       commitSha,
       draft: true,
-      evidence,
+      nextAction: proposal.nextAction,
       pullRequestNumber: pullRequest.number,
       pullRequestUrl: pullRequest.html_url,
       repository: proposal.repository,
+      workOrderPath: proposal.workOrderPath,
     };
   }
 
@@ -299,7 +391,7 @@ export class ImplementationService {
     assertSafeWriteBranch(input.branchName, this.config.allowedBranchPrefixes);
   }
 
-  private assertProposalPolicy(proposal: ImplementationProposal, productContext?: ProductContextPack): void {
+  private assertProposalPolicy(proposal: ImplementationProposal): void {
     this.assertPolicy({
       baseBranch: proposal.baseBranch,
       branchName: proposal.branchName,
@@ -310,36 +402,18 @@ export class ImplementationService {
       throw new ImplementationProposalPolicyError("Implementation PRs must be draft PRs.");
     }
 
-    if (proposal.changedFiles.length > this.config.maxChangedFiles) {
-      throw new ImplementationProposalPolicyError(
-        `Implementation proposal changes ${proposal.changedFiles.length} files; v0 limit is ${this.config.maxChangedFiles}.`,
-      );
+    assertSafeWorkOrderPath(proposal.workOrderPath, proposal.taskId);
+
+    if (!proposal.prBody.includes(IMPLEMENTATION_PENDING_NOTICE)) {
+      throw new ImplementationProposalPolicyError("Implementation PR body must clearly state implementation is pending.");
     }
 
-    if (totalChangeChars(proposal.changedFiles) > this.config.maxTotalChangeChars) {
-      throw new ImplementationProposalPolicyError(
-        `Implementation proposal exceeds the ${this.config.maxTotalChangeChars} character total change limit.`,
-      );
+    if (!proposal.workOrderContent.includes(IMPLEMENTATION_PENDING_NOTICE)) {
+      throw new ImplementationProposalPolicyError("Implementation work order must clearly state implementation is pending.");
     }
 
-    const knownCompleteContextPaths = new Set(
-      productContext?.repoContext?.files.filter((file) => !file.truncated).map((file) => file.path) ?? [],
-    );
-
-    for (const change of proposal.changedFiles) {
-      assertSafeFileChangePath(change.path);
-
-      if (change.content.length > this.config.maxFileChars) {
-        throw new ImplementationProposalPolicyError(
-          `Implementation proposal file ${change.path} exceeds the ${this.config.maxFileChars} character file limit.`,
-        );
-      }
-
-      if (change.action === "update" && productContext && !knownCompleteContextPaths.has(change.path)) {
-        throw new ImplementationProposalPolicyError(
-          `Implementation proposal updates ${change.path}, but that file was not fully included in the Product Context Pack.`,
-        );
-      }
+    if (!proposal.nextAction.includes("Codex")) {
+      throw new ImplementationProposalPolicyError("Implementation work order must name the next Codex action.");
     }
   }
 
@@ -365,40 +439,7 @@ export class ImplementationService {
     }
   }
 
-  private async contentExists(repository: string, path: string, ref: string): Promise<boolean> {
-    const { owner, repo } = parseRepository(repository);
-
-    try {
-      const response = await this.client.request<GitHubContentsMetadataResponse>({
-        path: `/repos/${owner}/${repo}/contents/${encodePathSegment(path)}`,
-        query: { ref },
-      });
-
-      return response.type === "file" || Boolean(response.sha);
-    } catch (error) {
-      if (error instanceof GitHubApiError && error.statusCode === 404) {
-        return false;
-      }
-
-      throw error;
-    }
-  }
-
-  private async assertFileExistenceMatchesActions(proposal: ImplementationProposal, ref: string): Promise<void> {
-    for (const change of proposal.changedFiles) {
-      const exists = await this.contentExists(proposal.repository, change.path, ref);
-
-      if (change.action === "create" && exists) {
-        throw new ImplementationProposalPolicyError(`Implementation proposal cannot create existing file ${change.path}.`);
-      }
-
-      if (change.action === "update" && !exists) {
-        throw new ImplementationProposalPolicyError(`Implementation proposal cannot update missing file ${change.path}.`);
-      }
-    }
-  }
-
-  private async commitFileChanges(proposal: ImplementationProposal, parentSha: string): Promise<string> {
+  private async commitWorkOrder(proposal: ImplementationProposal, parentSha: string): Promise<string> {
     const { owner, repo } = parseRepository(proposal.repository);
     const parentCommit = await this.client.request<GitCommitResponse>({
       path: `/repos/${owner}/${repo}/git/commits/${parentSha}`,
@@ -406,12 +447,14 @@ export class ImplementationService {
     const tree = await this.client.request<GitTreeResponse>({
       body: {
         base_tree: parentCommit.tree.sha,
-        tree: proposal.changedFiles.map((change) => ({
-          content: change.content,
-          mode: "100644",
-          path: change.path,
-          type: "blob",
-        })),
+        tree: [
+          {
+            content: proposal.workOrderContent,
+            mode: "100644",
+            path: proposal.workOrderPath,
+            type: "blob",
+          },
+        ],
       },
       method: "POST",
       path: `/repos/${owner}/${repo}/git/trees`,

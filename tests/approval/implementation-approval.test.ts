@@ -6,42 +6,45 @@ import {
   verifyImplementationApproval,
 } from "../../src/approval/implementation-approval.js";
 import type { ImplementationProposal } from "../../src/domain/implementation-proposal.js";
+import { IMPLEMENTATION_PENDING_NOTICE } from "../../src/domain/implementation-proposal.js";
 
 const secret = "test-approval-secret";
 const now = new Date("2026-05-15T12:00:00.000Z");
 const proposal: ImplementationProposal = {
-  approvalWarnings: ["Draft only. Merge and deployment require Sherif approval."],
+  approvalWarnings: [
+    "Implementation pending. This draft PR is a starting point for Codex implementation, not the final deliverable.",
+    "Agent Office will commit only the work-order file. Product code changes must happen later on this branch.",
+    "Merge and deployment require separate final human approval.",
+  ],
   baseBranch: "main",
   baseCommitSha: "abc123",
   branchName: "agent-office/impl-improve-task-capture-22222222",
-  changedFiles: [
-    {
-      action: "update",
-      content: "export const value = true;\n",
-      path: "lib/capture.ts",
-      summary: "Enable the safer capture path.",
-    },
-  ],
-  commitMessage: "Implement safer capture path",
-  contextGaps: [],
+  commitMessage: "Add implementation work order for Improve task capture",
   draft: true,
-  implementationSummary: "Update the capture helper.",
-  prBody: "## Summary\n- Update capture helper",
-  prTitle: "[Draft] Improve task capture",
+  handoffSummary: {
+    acceptanceChecklist: ["Capture works."],
+    constraints: ["Do not merge or deploy."],
+    implementationScope: ["Prepare implementation work."],
+    implementationSteps: ["Inspect code", "Implement", "Test"],
+    likelyAffectedFiles: ["lib/capture.ts"],
+    problemSummary: "Task capture needs improvement.",
+    productIntent: "Make capture smoother.",
+    suggestedBranchName: "codex/improve-task-capture",
+    suggestedPrTitle: "Improve task capture",
+    testsToRun: ["npm test"],
+  },
+  nextAction: "Codex must implement on this branch, run relevant tests, and return evidence before human merge or deploy approval.",
+  prBody: `${IMPLEMENTATION_PENDING_NOTICE}\n\nWork order only.`,
+  prTitle: "[Draft] Implementation pending: Improve task capture",
   repository: "SherifHaidar/personal-chief-of-staff",
   taskId: "22222222-2222-2222-2222-222222222222",
   taskName: "Improve task capture",
-  verificationPlan: {
-    acceptanceCriteria: ["Capture still succeeds."],
-    automatedChecks: ["npm test"],
-    evidenceToCollect: ["GitHub checks"],
-    manualChecks: ["Submit a test capture."],
-    regressionRisks: ["Capture API regression."],
-  },
+  workOrderContent: `${IMPLEMENTATION_PENDING_NOTICE}\n\n# Work order\nCodex must implement next.`,
+  workOrderPath: ".agent-office/work-orders/22222222-2222-2222-2222-222222222222.md",
 };
 
 describe("Implementation approval tokens", () => {
-  it("verifies a signed token and preserves the exact proposed file changes", () => {
+  it("verifies a signed token and preserves the exact work-order proposal", () => {
     const approval = createImplementationApproval({
       now,
       previewRunId: "run_preview",

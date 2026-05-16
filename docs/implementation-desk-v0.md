@@ -8,7 +8,7 @@ It now has three controlled stages:
 2. From that approved handoff, preview and approve a GitHub Draft PR Prep action.
 3. From an `In Codex` task with an approved handoff, preview and approve Controlled Implementation.
 
-Codex Handoff approval still does not edit product code, merge, deploy, or change repository settings/secrets. Controlled Implementation can edit product code only after its separate exact proposal approval.
+Codex Handoff approval still does not edit product code, merge, deploy, or change repository settings/secrets. Controlled Implementation now creates a deterministic work-order PR as the starting point for Codex implementation; it does not generate product-code replacements itself.
 
 ## Flow
 
@@ -30,12 +30,13 @@ Ready for Codex task
 ```text
 In Codex task with Codex Handoff Brief marker
   -> load the persisted handoff from Notion
-  -> preview Controlled Implementation Proposal
-  -> human approves the signed implementation proposal
+  -> preview deterministic implementation work-order proposal
+  -> human approves the signed work-order proposal
   -> create/update allowlisted implementation branch
-  -> commit exact approved product file changes
+  -> commit .agent-office/work-orders/<notion-task-id>.md
   -> open/update draft PR against main
-  -> append implementation PR/evidence result to the Notion task
+  -> append work-order PR result and next Codex action to the Notion task
+  -> Codex implements on that real product branch after this Office step
 ```
 
 ## Codex Handoff Brief Contents
@@ -66,7 +67,7 @@ Codex Handoff approval writes the exact handoff embedded in the token. It must n
 
 GitHub Draft PR approval writes the exact GitHub proposal embedded in the token. It must not regenerate the proposal, change branch names, change file content, or alter PR text during execution.
 
-Controlled Implementation approval writes the exact implementation proposal embedded in the token. Resuming from a persisted Notion handoff is a v0 recovery path for tasks already in `In Codex`; it should be replaced by a durable structured proposal store later.
+Controlled Implementation approval writes the exact work-order proposal embedded in the token. The token covers repository, branch, base SHA, PR title/body, work-order path/content, task ID, and handoff summary. Resuming from a persisted Notion handoff is a v0 recovery path for tasks already in `In Codex`; it should be replaced by a durable structured proposal store later.
 
 ## Notion Write Contract
 
@@ -75,6 +76,7 @@ The Implementation Desk may write to Notion only after approved actions:
 1. Append `Codex Handoff Brief:` blocks to the same task page.
 2. Update Status to the configured `NOTION_STATUS_AFTER_CODEX_HANDOFF`, usually `In Codex`, only after the handoff append succeeds.
 3. Append `GitHub Draft PR:` blocks with PR URL, branch, commit SHA, base branch, and handoff file path only after GitHub branch/commit/draft PR creation succeeds.
+4. Append `Implementation Work-Order Draft PR:` blocks with PR URL, branch, commit SHA, base branch, work-order path, and next Codex action only after GitHub branch/commit/draft PR creation succeeds.
 
 If writeback fails, status must not advance. If the task page already contains a `Codex Handoff Brief:` marker, approved handoff writeback is skipped to avoid duplicate handoffs.
 
@@ -99,6 +101,6 @@ All routes require `x-agent-office-api-key`.
 
 - Architecture Desk: `Ready for Architecture` -> Architect Brief -> `Ready for Codex`
 - Codex Handoff Desk: `Ready for Codex` -> Codex Handoff Brief -> `In Codex`
-- Implementation Ready: `In Codex` + `Codex Handoff Brief:` -> Controlled Implementation Preview -> Implementation Draft PR
+- Implementation Ready: `In Codex` + `Codex Handoff Brief:` -> Work-Order Preview -> Implementation-pending Draft PR
 
 All modes use preview -> approve -> exact execution.

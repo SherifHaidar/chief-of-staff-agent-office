@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ArchitectBrief } from "../src/domain/architect-brief.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../src/domain/implementation-proposal.js";
+import { IMPLEMENTATION_PENDING_NOTICE } from "../src/domain/implementation-proposal.js";
 import { chunkBlocks, renderArchitectBriefBlocks, renderImplementationResultBlocks } from "../src/notion/notion-block-renderer.js";
 
 const brief: ArchitectBrief = {
@@ -60,54 +61,56 @@ describe("renderArchitectBriefBlocks", () => {
 });
 
 describe("renderImplementationResultBlocks", () => {
-  it("renders implementation PR evidence and verification details", () => {
+  it("renders implementation work-order PR details without implying implementation is complete", () => {
     const proposal: ImplementationProposal = {
       approvalWarnings: ["Draft only."],
       baseBranch: "main",
       baseCommitSha: "base-sha",
       branchName: "agent-office/impl-test",
-      changedFiles: [{ action: "update", content: "export const ok = true;\n", path: "lib/capture.ts", summary: "Update capture." }],
-      commitMessage: "Update capture",
-      contextGaps: ["One additional file should be inspected manually."],
+      commitMessage: "Add implementation work order",
       draft: true,
-      implementationSummary: "Update the capture helper.",
-      prBody: "## Summary\n- Update capture",
-      prTitle: "[Draft] Update capture",
+      handoffSummary: {
+        acceptanceChecklist: ["Capture works."],
+        constraints: ["Do not merge or deploy."],
+        implementationScope: ["Prepare implementation work."],
+        implementationSteps: ["Inspect code", "Implement", "Test"],
+        likelyAffectedFiles: ["lib/capture.ts"],
+        problemSummary: "Capture needs improvement.",
+        productIntent: "Make capture smoother.",
+        suggestedBranchName: "codex/update-capture",
+        suggestedPrTitle: "Update capture",
+        testsToRun: ["npm test"],
+      },
+      nextAction: "Codex must implement on this branch, run relevant tests, and return evidence before human merge or deploy approval.",
+      prBody: `${IMPLEMENTATION_PENDING_NOTICE}\n\nWork order only.`,
+      prTitle: "[Draft] Implementation pending: Update capture",
       repository: "SherifHaidar/personal-chief-of-staff",
       taskId: "22222222-2222-2222-2222-222222222222",
       taskName: "Update capture",
-      verificationPlan: {
-        acceptanceCriteria: ["Capture works."],
-        automatedChecks: ["npm test"],
-        evidenceToCollect: ["GitHub checks"],
-        manualChecks: ["Submit a test capture."],
-        regressionRisks: ["Capture regression."],
-      },
+      workOrderContent: `${IMPLEMENTATION_PENDING_NOTICE}\n\n# Work order`,
+      workOrderPath: ".agent-office/work-orders/22222222-2222-2222-2222-222222222222.md",
     };
     const result: ImplementationExecutionResult = {
       baseBranch: "main",
       baseCommitSha: "base-sha",
       branchName: "agent-office/impl-test",
-      changedFiles: [{ action: "update", path: "lib/capture.ts", summary: "Update capture." }],
       checks: [{ conclusion: "success", name: "CI", status: "completed" }],
       commitSha: "commit-sha",
       draft: true,
-      evidence: {
-        automatedChecksSummary: "GitHub checks reported no failing conclusions at capture time.",
-        evidence: ["CI: success"],
-        verificationGaps: [],
-      },
+      nextAction: proposal.nextAction,
       pullRequestNumber: 55,
       pullRequestUrl: "https://github.com/SherifHaidar/personal-chief-of-staff/pull/55",
       repository: "SherifHaidar/personal-chief-of-staff",
+      workOrderPath: proposal.workOrderPath,
     };
 
     const blocks = renderImplementationResultBlocks(result, proposal, new Date("2026-05-14T12:00:00.000Z"));
     const serialized = JSON.stringify(blocks);
 
-    expect(serialized).toContain("Controlled Implementation Draft PR");
-    expect(serialized).toContain("Verification Gaps");
+    expect(serialized).toContain("Implementation Work-Order Draft PR");
+    expect(serialized).toContain(IMPLEMENTATION_PENDING_NOTICE);
+    expect(serialized).toContain("Work Order File");
     expect(serialized).toContain("CI: success");
-    expect(serialized).toContain("Draft only");
+    expect(serialized).toContain("Product code has not been implemented by this step.");
   });
 });
