@@ -6,7 +6,7 @@ This document defines the Notion-side operating contract for the Agent Office. N
 
 There are two separate systems:
 
-- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`, currently `SherifHaidar/personal-chief-of-staff`. The Agent Office may create approved Agent Office branches and draft PR prep artifacts in this repo, but must not merge, deploy, push to `main`, edit product code autonomously, or change settings/secrets.
+- Chief of Staff app / product repo: the user-facing product repository configured with `TARGET_PRODUCT_REPO`, currently `SherifHaidar/personal-chief-of-staff`. The Agent Office may create approved Agent Office branches, draft PR prep artifacts, and separately approved implementation draft PRs in this repo, but must not merge, deploy, push to `main`, edit product code without a signed implementation proposal approval, or change settings/secrets.
 - Agent Office / orchestrator repo: `SherifHaidar/chief-of-staff-agent-office`. This repo owns orchestration, Notion task reading/writeback, agent workflow execution, API endpoints, approval tokens, GitHub App integration, and run summaries.
 
 The Agent Office is not product code. It is the controlled office layer around product work.
@@ -108,6 +108,18 @@ The dashboard should stay human-readable and operational. It should not become t
 6. Append `GitHub Draft PR:` blocks to the same Notion task page with PR URL, branch, base commit, commit SHA, and handoff file path.
 7. Do not update task status automatically after draft PR prep.
 
+### Controlled Implementation
+
+1. Require an approved Codex Handoff Brief marker on the task page.
+2. Generate a Controlled Implementation Proposal from the task, approved handoff token, Product Context Pack, and task page content.
+3. Preview exact proposed file paths, replacement contents, PR text, and task-specific verification plan.
+4. Require separate signed implementation approval before writing product code.
+5. On approval, create or update an allowlisted implementation branch and draft PR.
+6. Commit only the exact approved file changes.
+7. Capture available GitHub check/status evidence.
+8. Append `Controlled Implementation Draft PR:` blocks to the same Notion task page with PR URL, branch, commit SHA, files changed, verification plan, evidence, and gaps.
+9. Do not update task status automatically after implementation PR creation in v0.
+
 Required safety rules:
 
 - Preview/dry-run mode must not write to Notion or GitHub.
@@ -116,6 +128,7 @@ Required safety rules:
 - Status must not advance if append fails.
 - GitHub writes must be repo-allowlisted and branch-prefix guarded.
 - The Agent Office must not push to `main`, merge, deploy, change settings, or change secrets.
+- Product code writes require their own implementation approval token. Architect Brief and Codex Handoff approvals are not coding approvals.
 - Workflow/application code owns side effects.
 
 ## API Security Contract
@@ -135,7 +148,7 @@ Secondary guard: page markers. Before approved writeback, the Agent Office check
 - `Architect Brief:`
 - `Codex Handoff Brief:`
 
-GitHub Draft PR Prep also checks for duplicate branch/PR before creating a new branch.
+GitHub Draft PR Prep also checks for duplicate branch/PR before creating a new branch. Controlled Implementation creates or updates the scoped implementation branch/PR instead of creating duplicates.
 
 Future guard: explicit run metadata. Stronger fields such as `Last Architect Brief At`, `Last Agent Run At`, or `Agent Run ID` can make duplicate handling more reliable later.
 
@@ -169,6 +182,8 @@ The Agent Office currently supports:
 - Appending approved Codex Handoff Briefs back to the same task page.
 - Moving successfully processed handoffs to `In Codex`.
 - Creating approved GitHub Draft PR Prep branches and draft PRs with handoff files.
+- Creating separately approved implementation branches and draft PRs with exact approved product file changes.
+- Capturing task-specific verification plans and available GitHub check evidence for implementation PRs.
 - Producing structured API responses and local run summaries.
 
 Future integrations should continue to call workflow/application services instead of duplicating Notion or GitHub write logic in route handlers or agents.

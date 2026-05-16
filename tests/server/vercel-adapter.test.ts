@@ -40,6 +40,15 @@ describe("Vercel adapter", () => {
     ).toBe("/agent-office/github/draft-pr");
   });
 
+  it("maps the explicit controlled implementation function to the existing API route", () => {
+    expect(
+      toFastifyInjectUrl(
+        "https://agent-office.example.com/api/agent-office/github/implementation",
+        "/agent-office/github/implementation",
+      ),
+    ).toBe("/agent-office/github/implementation");
+  });
+
   it("preserves query strings when mapping explicit Vercel functions", () => {
     expect(toFastifyInjectUrl("https://agent-office.example.com/api/health?check=smoke", "/health")).toBe(
       "/health?check=smoke",
@@ -70,6 +79,14 @@ describe("Vercel adapter", () => {
         {
           source: "/agent-office/github/draft-pr/approve",
           destination: "/api/agent-office/github/draft-pr/approve",
+        },
+        {
+          source: "/agent-office/github/implementation",
+          destination: "/api/agent-office/github/implementation",
+        },
+        {
+          source: "/agent-office/github/implementation/approve",
+          destination: "/api/agent-office/github/implementation/approve",
         },
         { source: "/agent-office/run-ready-architecture", destination: "/api/agent-office/run-ready-architecture" },
       ]),

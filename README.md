@@ -33,6 +33,17 @@ Approved Codex Handoff Brief
   -> append PR link/branch/commit back to Notion
 ```
 
+```text
+Approved Codex Handoff Brief
+  -> Controlled Implementation Proposal preview
+  -> separate signed implementation approval
+  -> create/update agent-office/* implementation branch
+  -> commit exact approved file changes
+  -> open/update draft PR against main
+  -> capture available GitHub checks/evidence
+  -> append PR/check/evidence summary back to Notion
+```
+
 The longer-term goal is an AI Development Office that can coordinate architecture, implementation planning, review, QA, release notes, GitHub/Vercel coordination, and human approval gates.
 
 ## Product Context Pack v0
@@ -56,6 +67,7 @@ It does not load the whole repo. File count and character budgets are capped. Ag
 - [Architecture Desk Revision Loop v0](docs/architecture-desk-revision-loop-v0.md)
 - [Implementation Desk v0](docs/implementation-desk-v0.md)
 - [GitHub Draft PR Prep v0](docs/github-draft-pr-prep-v0.md)
+- [Controlled Implementation + Verification Lane v0](docs/controlled-implementation-verification-v0.md)
 - [Product Context Pack v0](docs/product-context-pack-v0.md)
 
 ## Quick Start
@@ -92,9 +104,9 @@ The page is public as a shell, but every `/agent-office/*` request it makes requ
 
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
 - Architecture Desk revisions: provide feedback, generate revised previews, and approve only the latest satisfactory preview.
-- Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep.
+- Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep or Controlled Implementation.
 
-Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content.
+Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval.
 
 ## HTTP API
 
@@ -187,6 +199,24 @@ curl -X POST http://127.0.0.1:3000/agent-office/github/draft-pr/approve \
   -d '{"approvalToken":"<github-draft-pr-approval-token>"}'
 ```
 
+Preview a Controlled Implementation Proposal from the approved Codex Handoff token:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/github/implementation \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"codexHandoffApprovalToken":"<codex-handoff-approval-token>"}'
+```
+
+Approve exact implementation branch and draft PR creation:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/github/implementation/approve \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"approvalToken":"<implementation-approval-token>"}'
+```
+
 Batch dry-run architecture-ready tasks:
 
 ```bash
@@ -206,7 +236,7 @@ Required for live API use:
 - `AGENT_OFFICE_API_KEY`
 - `AGENT_OFFICE_APPROVAL_SECRET`
 
-Required for GitHub Draft PR Prep:
+Required for GitHub Draft PR Prep and Controlled Implementation:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_INSTALLATION_ID`
@@ -214,6 +244,9 @@ Required for GitHub Draft PR Prep:
 - `GITHUB_ALLOWED_REPOS=SherifHaidar/personal-chief-of-staff`
 - `GITHUB_ALLOWED_BRANCH_PREFIXES=agent-office/,codex/`
 - `GITHUB_DEFAULT_BASE_BRANCH=main`
+- `IMPLEMENTATION_MAX_CHANGED_FILES=4`
+- `IMPLEMENTATION_MAX_FILE_CHARS=16000`
+- `IMPLEMENTATION_MAX_TOTAL_CHANGE_CHARS=32000`
 
 Required for Product Context Pack:
 
@@ -239,7 +272,7 @@ Recommended explicit configuration:
 
 Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. The approval secret signs short-lived approval tokens and should be different from the API key.
 
-The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, and `Pull requests: read/write`. Product Context Pack uses the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
+The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, `Pull requests: read/write`, and check/status read access if available. Product Context Pack uses the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
 
 The Notion integration must be able to read the AI Build Tasks database, read task page content, read the product context page, append blocks to task pages, and update the configured status property.
 
@@ -261,4 +294,4 @@ Agents do not receive tools that mutate external systems. They only return struc
 
 Agents may receive a bounded Product Context Pack containing Notion product context and selected GitHub repo file excerpts. This is read-only context, not tool access. Missing context is surfaced as context gaps.
 
-Dry-run and preview steps do not write to Notion or GitHub. Approved Notion writeback appends to the same task page first and updates status only after append succeeds. Approved GitHub Draft PR Prep creates only an allowlisted branch, one handoff file commit, and a draft PR. It does not edit product code, push to main, merge, deploy, or change repository settings/secrets.
+Dry-run and preview steps do not write to Notion or GitHub. Approved Notion writeback appends to the same task page first and updates status only after append succeeds. Approved GitHub Draft PR Prep creates only an allowlisted branch, one handoff file commit, and a draft PR. Approved Controlled Implementation can commit exact approved product file changes to an allowlisted implementation branch and open/update a draft PR. It does not push to main, merge, deploy, or change repository settings/secrets.

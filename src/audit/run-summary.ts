@@ -3,7 +3,8 @@ export type AgentOfficeWorkflow =
   | "architect-review"
   | "architect-review-revision"
   | "codex-handoff"
-  | "github-draft-pr-prep";
+  | "github-draft-pr-prep"
+  | "implementation";
 
 export type AgentOfficeRunSummary = {
   briefGenerated: boolean;

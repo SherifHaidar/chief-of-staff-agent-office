@@ -46,6 +46,14 @@
       "destination": "/api/agent-office/github/draft-pr/approve"
     },
     {
+      "source": "/agent-office/github/implementation",
+      "destination": "/api/agent-office/github/implementation"
+    },
+    {
+      "source": "/agent-office/github/implementation/approve",
+      "destination": "/api/agent-office/github/implementation/approve"
+    },
+    {
       "source": "/agent-office/run-ready-architecture",
       "destination": "/api/agent-office/run-ready-architecture"
     }
