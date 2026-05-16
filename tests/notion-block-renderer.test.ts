@@ -75,6 +75,7 @@ describe("renderImplementationResultBlocks", () => {
       prTitle: "[Draft] Update capture",
       repository: "SherifHaidar/personal-chief-of-staff",
       taskId: "22222222-2222-2222-2222-222222222222",
+      taskName: "Update capture",
       verificationPlan: {
         acceptanceCriteria: ["Capture works."],
         automatedChecks: ["npm test"],
