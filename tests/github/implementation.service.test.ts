@@ -115,6 +115,26 @@ describe("ImplementationService", () => {
     ).toThrow(ImplementationProposalPolicyError);
   });
 
+  it("requires a task name when finalizing an implementation proposal", () => {
+    const service = createService();
+    const { taskName: _payloadTaskName, ...payloadWithoutTaskName } = payload;
+    const { taskName: _proposalTaskName, ...proposalWithoutTaskName } = proposal;
+
+    expect(() =>
+      service.finalizeProposal({
+        payload: payloadWithoutTaskName as CodexHandoffApprovalPayload,
+        proposal: proposalWithoutTaskName as unknown as ImplementationProposal,
+        shell: {
+          baseBranch: "main",
+          baseCommitSha: "base-sha",
+          branchName: "agent-office/impl-improve-task-capture-22222222",
+          repository: "SherifHaidar/personal-chief-of-staff",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+      }),
+    ).toThrow("Implementation proposals require a task name.");
+  });
+
   it("requires updated files to be fully included in product context during preview", () => {
     const service = createService();
 

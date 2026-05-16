@@ -228,6 +228,11 @@ export class ImplementationService {
       taskId: string;
     };
   }): ImplementationProposal {
+    const taskName = input.payload.taskName ?? input.proposal.taskName;
+    if (!taskName) {
+      throw new ImplementationProposalPolicyError("Implementation proposals require a task name.");
+    }
+
     const proposal = {
       ...input.proposal,
       baseBranch: input.shell.baseBranch,
@@ -237,7 +242,7 @@ export class ImplementationService {
       prTitle: normalizePrTitle(input.proposal.prTitle),
       repository: input.shell.repository,
       taskId: input.shell.taskId,
-      ...(input.payload.taskName ? { taskName: input.payload.taskName } : {}),
+      taskName,
     };
 
     this.assertProposalPolicy(proposal, input.productContext);
