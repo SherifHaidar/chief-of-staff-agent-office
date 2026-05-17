@@ -44,6 +44,20 @@ const claudeReview: ClaudeReviewPacket = {
   verdict: "Ready for Human Smoke Test",
 };
 
+const needsFixReview: ClaudeReviewPacket = {
+  acceptanceChecklist: [{ criterion: "Final approval is not implied.", notes: "The UI still uses approval copy.", status: "fail" }],
+  codexFixBrief: {
+    instructions: ["Replace approval copy with human smoke-test copy."],
+    summary: "Tighten Review Desk approval-boundary copy.",
+    verification: ["Run the Review Desk renderer tests."],
+  },
+  missingEvidence: [],
+  risks: ["Users may confuse Review Desk output for merge approval."],
+  suggestedSmokeTests: ["Run the review route against a draft PR."],
+  summary: "Codex needs to fix the approval-boundary language before smoke testing.",
+  verdict: "Needs Codex Fixes",
+};
+
 function createRepository() {
   return {
     appendReviewDeskResult: vi.fn<ReviewDeskTaskRepository["appendReviewDeskResult"]>().mockResolvedValue(undefined),
@@ -156,6 +170,45 @@ describe("ReviewDeskWorkflow", () => {
         },
       },
     });
+  });
+
+  it("preserves Needs Codex Fixes review packets with a Codex fix brief", async () => {
+    const repository = createRepository();
+    const workflow = new ReviewDeskWorkflow({
+      now: () => new Date("2026-05-17T10:00:00.000Z"),
+      reviewDeskService: createService(),
+      reviewer: createReviewer(needsFixReview),
+      taskRepository: repository,
+    });
+
+    const result = await workflow.run({
+      pullRequestNumber: 20,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        review: {
+          codexFixBrief: {
+            summary: "Tighten Review Desk approval-boundary copy.",
+          },
+          verdict: "Needs Codex Fixes",
+        },
+      },
+    });
+    expect(repository.appendReviewDeskResult).toHaveBeenCalledWith(
+      pageId,
+      expect.objectContaining({
+        review: expect.objectContaining({
+          codexFixBrief: expect.objectContaining({
+            instructions: ["Replace approval copy with human smoke-test copy."],
+          }),
+        }),
+      }),
+      new Date("2026-05-17T10:00:00.000Z"),
+    );
   });
 
   it("blocks when Claude structured output is invalid", async () => {

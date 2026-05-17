@@ -452,7 +452,7 @@ export function renderOperatorConsolePage(): string {
         renderList('Missing Evidence', review.missingEvidence),
         renderList('Acceptance Checklist', (review.acceptanceChecklist || []).map(function (item) { return item.status + ': ' + item.criterion + ' - ' + item.notes; })),
         renderList('Suggested Smoke Tests', review.suggestedSmokeTests),
-        review.codexFixBrief ? '<h3>Draft Codex Fix Brief</h3><p>' + escapeHtml(review.codexFixBrief.summary) + '</p>' + renderList('Fix Instructions', review.codexFixBrief.instructions) + renderList('Verification', review.codexFixBrief.verification) : ''
+        review.verdict === 'Needs Codex Fixes' && review.codexFixBrief ? '<h3>Draft Codex Fix Brief</h3><p>' + escapeHtml(review.codexFixBrief.summary) + '</p>' + renderList('Fix Instructions', review.codexFixBrief.instructions) + renderList('Verification', review.codexFixBrief.verification) : ''
       ].join("");
     }
 

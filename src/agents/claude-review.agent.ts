@@ -18,6 +18,20 @@ type AnthropicMessageResponse = {
 };
 
 const REVIEW_TOOL_NAME = "emit_review_packet";
+const CHIEF_OF_STAFF_PRODUCT_REPO = "sherifhaidar/personal-chief-of-staff";
+const CHIEF_OF_STAFF_DO_NOT_BREAK_FLOWS = [
+  "Project preview remains review-first and does not write before confirmation.",
+  "Confirm Save updates the matched Projects DB row and appends the dated project page log.",
+  "Project / Daily Capture saves do not append broad Daily Capture digests to Weekly To-do.",
+  "Short yes/confirm replies still confirm the currently pending project save.",
+  '"save that..." and durable memory captures route to memory, with pending-project disambiguation for memory/project/both.',
+  "Standalone memory confirmation supports short yes replies and does not create Notion project writes.",
+  "Quick Task and timed reminder routing remains separate from broad project updates.",
+  "Voice transcription and typed capture still reach the same capture processing path.",
+  "Outcome preservation logic is not broadened or rewritten.",
+  "Operating Manual loading and selective Supabase memory behavior are preserved.",
+  "Human confirmation remains required before persistent writes.",
+];
 const REVIEW_TOOL_INPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
@@ -61,8 +75,33 @@ const REVIEW_SYSTEM_PROMPT = [
   `Call the ${REVIEW_TOOL_NAME} tool exactly once with the structured review packet.`,
   "Allowed verdicts are exactly: Needs Codex Fixes, Ready for Human Smoke Test, Blocked.",
   "Ready for Human Smoke Test never means merge-ready, deploy-ready, or finally approved.",
-  "If fixes are needed and actionable, include a codexFixBrief. Do not ask Codex to merge, deploy, or bypass Sherif approval.",
+  "Only include codexFixBrief when the verdict is Needs Codex Fixes and the fixes are actionable.",
+  "Do not ask Codex to merge, deploy, or bypass Sherif approval.",
 ].join("\n");
+
+function isChiefOfStaffProductReview(evidence: ReviewDeskEvidencePacket): boolean {
+  return evidence.pullRequest.repository.trim().toLowerCase() === CHIEF_OF_STAFF_PRODUCT_REPO;
+}
+
+function buildReviewMessage(evidence: ReviewDeskEvidencePacket): string {
+  const context = [
+    "Review this evidence packet and call the required structured review tool.",
+    "Each acceptanceChecklist item must include criterion, status (pass|fail|unclear), and notes.",
+    "Do not include codexFixBrief unless the final verdict is Needs Codex Fixes.",
+  ];
+
+  if (isChiefOfStaffProductReview(evidence)) {
+    context.push(
+      "",
+      "Chief of Staff do-not-break flows to evaluate for this product repo review:",
+      ...CHIEF_OF_STAFF_DO_NOT_BREAK_FLOWS.map((flow) => `- ${flow}`),
+    );
+  }
+
+  context.push("", JSON.stringify(evidence, null, 2));
+
+  return context.join("\n");
+}
 
 function extractJsonObject(value: string): string {
   const trimmed = value.trim();
@@ -134,12 +173,7 @@ export class AnthropicClaudeReviewRunner implements ClaudeReviewRunner {
         max_tokens: 6000,
         messages: [
           {
-            content: [
-              "Review this evidence packet and call the required structured review tool.",
-              "Each acceptanceChecklist item must include criterion, status (pass|fail|unclear), and notes.",
-              "",
-              JSON.stringify(evidence, null, 2),
-            ].join("\n"),
+            content: buildReviewMessage(evidence),
             role: "user",
           },
         ],

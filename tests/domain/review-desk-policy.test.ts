@@ -52,6 +52,15 @@ const readyReview: ClaudeReviewPacket = {
   verdict: "Ready for Human Smoke Test",
 };
 
+const readyReviewWithFixBrief: ClaudeReviewPacket = {
+  ...readyReview,
+  codexFixBrief: {
+    instructions: ["Change the implementation."],
+    summary: "A stale fix brief should not render on Ready.",
+    verification: ["Run the tests."],
+  },
+};
+
 describe("Review Desk deterministic policy", () => {
   it("blocks when changed-file evidence is missing", () => {
     const packet = evidence({
@@ -95,5 +104,51 @@ describe("Review Desk deterministic policy", () => {
     expect(review.verdict).toBe("Needs Codex Fixes");
     expect(review.missingEvidence).toContain("Required checks are failing: CI: failure.");
   });
-});
 
+  it("records queued and in-progress checks as missing evidence", () => {
+    const packet = evidence({
+      pullRequest: {
+        ...evidence().pullRequest,
+        checks: [
+          { conclusion: null, name: "Typecheck and test", status: "queued" },
+          { conclusion: null, name: "Vercel", status: "in_progress" },
+        ],
+      },
+    });
+    const findings = evaluateReviewDeskEvidence(packet);
+    const review = applyReviewDeskPostGates({ evidence: packet, findings, review: readyReview });
+
+    expect(review.verdict).toBe("Ready for Human Smoke Test");
+    expect(review.missingEvidence).toContain(
+      "Required checks are not complete: Typecheck and test: queued, Vercel: in_progress.",
+    );
+  });
+
+  it("records PR #6-style green-preview but thin acceptance evidence as missing evidence", () => {
+    const packet = evidence({
+      workOrder: {
+        acceptanceCriteria: [],
+        contentMarkdown: "A product PR had a green preview, but the live acceptance evidence was still thin.",
+        pageTitle: "Tasks DB follow-up",
+        taskId: "22222222-2222-2222-2222-222222222222",
+      },
+    });
+    const findings = evaluateReviewDeskEvidence(packet);
+    const review = applyReviewDeskPostGates({ evidence: packet, findings, review: readyReview });
+
+    expect(findings).toContainEqual({
+      message: "Acceptance checklist evidence is missing or empty.",
+      severity: "missing_evidence",
+    });
+    expect(review.missingEvidence).toContain("Acceptance checklist evidence is missing or empty.");
+  });
+
+  it("removes stale Codex fix briefs unless the final verdict needs Codex fixes", () => {
+    const packet = evidence();
+    const findings = evaluateReviewDeskEvidence(packet);
+    const review = applyReviewDeskPostGates({ evidence: packet, findings, review: readyReviewWithFixBrief });
+
+    expect(review.verdict).toBe("Ready for Human Smoke Test");
+    expect(review.codexFixBrief).toBeUndefined();
+  });
+});

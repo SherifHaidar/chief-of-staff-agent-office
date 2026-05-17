@@ -10,6 +10,7 @@ const FAILED_CHECK_CONCLUSIONS = new Set([
 ]);
 
 const PASSING_CHECK_CONCLUSIONS = new Set(["success", "neutral", "skipped"]);
+const PENDING_CHECK_STATUSES = new Set(["in_progress", "pending", "queued", "requested", "waiting"]);
 
 function normalizeStatus(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -24,6 +25,22 @@ export function isFailedCheck(input: { conclusion?: string | null; status: strin
   }
 
   return status === "completed" && conclusion.length > 0 && !PASSING_CHECK_CONCLUSIONS.has(conclusion);
+}
+
+export function isPendingCheck(input: { conclusion?: string | null; status: string }): boolean {
+  const conclusion = normalizeStatus(input.conclusion);
+  const status = normalizeStatus(input.status);
+
+  return PENDING_CHECK_STATUSES.has(status) || PENDING_CHECK_STATUSES.has(conclusion);
+}
+
+function removeCodexFixBriefUnlessNeeded(review: ClaudeReviewPacket): ClaudeReviewPacket {
+  if (review.verdict === "Needs Codex Fixes") {
+    return review;
+  }
+
+  const { codexFixBrief, ...reviewWithoutFixBrief } = review;
+  return reviewWithoutFixBrief;
 }
 
 export function evaluateReviewDeskEvidence(evidence: ReviewDeskEvidencePacket): ReviewDeskFinding[] {
@@ -43,11 +60,26 @@ export function evaluateReviewDeskEvidence(evidence: ReviewDeskEvidencePacket): 
     });
   }
 
+  if (evidence.workOrder.acceptanceCriteria.length === 0) {
+    findings.push({
+      message: "Acceptance checklist evidence is missing or empty.",
+      severity: "missing_evidence",
+    });
+  }
+
   const failedChecks = evidence.pullRequest.checks.filter(isFailedCheck);
   if (failedChecks.length > 0) {
     findings.push({
       message: `Required checks are failing: ${failedChecks.map((check) => `${check.name}: ${check.conclusion ?? check.status}`).join(", ")}.`,
       severity: "fixes_needed",
+    });
+  }
+
+  const pendingChecks = evidence.pullRequest.checks.filter(isPendingCheck);
+  if (pendingChecks.length > 0) {
+    findings.push({
+      message: `Required checks are not complete: ${pendingChecks.map((check) => `${check.name}: ${check.conclusion ?? check.status}`).join(", ")}.`,
+      severity: "missing_evidence",
     });
   }
 
@@ -106,16 +138,16 @@ export function applyReviewDeskPostGates(input: {
   }
 
   if (hasFixRequiredFindings(input.findings) && input.review.verdict === "Ready for Human Smoke Test") {
-    return {
+    return removeCodexFixBriefUnlessNeeded({
       ...input.review,
       missingEvidence: Array.from(
         new Set([...input.review.missingEvidence, ...input.findings.map((finding) => finding.message)]),
       ),
       verdict: "Needs Codex Fixes",
-    };
+    });
   }
 
-  return {
+  return removeCodexFixBriefUnlessNeeded({
     ...input.review,
     missingEvidence: Array.from(
       new Set([
@@ -123,6 +155,5 @@ export function applyReviewDeskPostGates(input: {
         ...input.findings.filter((finding) => finding.severity === "missing_evidence").map((finding) => finding.message),
       ]),
     ),
-  };
+  });
 }
-

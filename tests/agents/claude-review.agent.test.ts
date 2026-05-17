@@ -75,6 +75,41 @@ describe("AnthropicClaudeReviewRunner", () => {
     expect(result).toEqual(reviewPacket);
     expect(requestBody.tool_choice).toEqual({ name: "emit_review_packet", type: "tool" });
     expect(requestBody.tools[0].name).toBe("emit_review_packet");
+    expect(requestBody.messages[0].content).not.toContain("Chief of Staff do-not-break flows");
+  });
+
+  it("includes Chief of Staff do-not-break flows when reviewing the product repo", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        content: [{ input: reviewPacket, name: "emit_review_packet", type: "tool_use" }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const productEvidence: ReviewDeskEvidencePacket = {
+      ...evidence,
+      input: {
+        ...evidence.input,
+        pullRequestNumber: 44,
+        repository: "SherifHaidar/personal-chief-of-staff",
+      },
+      pullRequest: {
+        ...evidence.pullRequest,
+        pullRequestNumber: 44,
+        repository: "SherifHaidar/personal-chief-of-staff",
+        url: "https://github.com/SherifHaidar/personal-chief-of-staff/pull/44",
+      },
+    };
+
+    await new AnthropicClaudeReviewRunner({
+      apiKey: "test-key",
+      model: "claude-sonnet-test",
+    }).review(productEvidence);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+
+    expect(requestBody.messages[0].content).toContain("Chief of Staff do-not-break flows");
+    expect(requestBody.messages[0].content).toContain("no broad Daily Capture digests to Weekly To-do");
+    expect(requestBody.messages[0].content).toContain("Standalone memory confirmation supports short yes replies");
+    expect(requestBody.messages[0].content).toContain("Do not include codexFixBrief unless the final verdict is Needs Codex Fixes.");
   });
 
   it("rejects invalid structured Claude tool output", async () => {

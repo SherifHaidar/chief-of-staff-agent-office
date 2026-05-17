@@ -175,4 +175,116 @@ describe("renderReviewDeskResultBlocks", () => {
     expect(serialized).toContain("not merge approval");
     expect(serialized).toContain("does not merge, deploy, approve production, or dispatch Codex fixes automatically");
   });
+
+  it("does not render a Draft Codex Fix Brief for Ready review packets", () => {
+    const result: ReviewDeskResult = {
+      evidence: {
+        collectedAt: "2026-05-17T10:00:00.000Z",
+        input: {
+          pullRequestNumber: 20,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+        missingEvidence: [],
+        policyFindings: [],
+        pullRequest: {
+          baseBranch: "main",
+          body: "Work order: `.agent-office/work-orders/22222222-2222-2222-2222-222222222222.md`",
+          changedFiles: [{ additions: 1, deletions: 0, path: "src/review.ts", patchTruncated: false, status: "modified" }],
+          checks: [{ conclusion: "success", name: "CI", status: "completed" }],
+          collectionWarnings: [],
+          deployments: [{ environment: "Preview", state: "success", statuses: [], url: "https://preview.example" }],
+          draft: true,
+          headBranch: "agent-office/impl-review",
+          headSha: "head-sha",
+          pullRequestNumber: 20,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          state: "open",
+          title: "Add Review Desk",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/20",
+        },
+        workOrder: {
+          acceptanceCriteria: ["Review packet generated."],
+          contentMarkdown: "Task markdown.",
+          pageTitle: "Review task",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+      },
+      finalApprovalWarning: "Review Desk output is not merge approval, deployment approval, or final Sherif approval.",
+      review: {
+        acceptanceChecklist: [{ criterion: "Review packet generated.", notes: "Covered.", status: "pass" }],
+        codexFixBrief: {
+          instructions: ["This stale brief must not render."],
+          summary: "Stale fix brief.",
+          verification: ["Run tests."],
+        },
+        missingEvidence: [],
+        risks: [],
+        suggestedSmokeTests: ["Open the preview."],
+        summary: "Ready for human smoke testing.",
+        verdict: "Ready for Human Smoke Test",
+      },
+    };
+    const serialized = JSON.stringify(renderReviewDeskResultBlocks(result, new Date("2026-05-17T10:00:00.000Z")));
+
+    expect(serialized).not.toContain("Draft Codex Fix Brief");
+    expect(serialized).not.toContain("This stale brief must not render.");
+  });
+
+  it("renders a Draft Codex Fix Brief for Needs Codex Fixes review packets", () => {
+    const result: ReviewDeskResult = {
+      evidence: {
+        collectedAt: "2026-05-17T10:00:00.000Z",
+        input: {
+          pullRequestNumber: 20,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+        missingEvidence: [],
+        policyFindings: [],
+        pullRequest: {
+          baseBranch: "main",
+          body: "Work order: `.agent-office/work-orders/22222222-2222-2222-2222-222222222222.md`",
+          changedFiles: [{ additions: 1, deletions: 0, path: "src/review.ts", patchTruncated: false, status: "modified" }],
+          checks: [{ conclusion: "success", name: "CI", status: "completed" }],
+          collectionWarnings: [],
+          deployments: [{ environment: "Preview", state: "success", statuses: [], url: "https://preview.example" }],
+          draft: true,
+          headBranch: "agent-office/impl-review",
+          headSha: "head-sha",
+          pullRequestNumber: 20,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          state: "open",
+          title: "Add Review Desk",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/20",
+        },
+        workOrder: {
+          acceptanceCriteria: ["Review packet generated."],
+          contentMarkdown: "Task markdown.",
+          pageTitle: "Review task",
+          taskId: "22222222-2222-2222-2222-222222222222",
+        },
+      },
+      finalApprovalWarning: "Review Desk output is not merge approval, deployment approval, or final Sherif approval.",
+      review: {
+        acceptanceChecklist: [{ criterion: "Review packet generated.", notes: "Needs copy fixes.", status: "fail" }],
+        codexFixBrief: {
+          instructions: ["Replace approval copy."],
+          summary: "Fix approval-boundary wording.",
+          verification: ["Run renderer tests."],
+        },
+        missingEvidence: [],
+        risks: ["Approval boundary is unclear."],
+        suggestedSmokeTests: ["Open the preview."],
+        summary: "Codex fixes are needed.",
+        verdict: "Needs Codex Fixes",
+      },
+    };
+    const serialized = JSON.stringify(renderReviewDeskResultBlocks(result, new Date("2026-05-17T10:00:00.000Z")));
+
+    expect(serialized).toContain("Draft Codex Fix Brief");
+    expect(serialized).toContain("Fix approval-boundary wording.");
+    expect(serialized).toContain("Replace approval copy.");
+    expect(serialized).toContain("Run renderer tests.");
+  });
 });

@@ -230,7 +230,7 @@ export function renderReviewDeskResultBlocks(result: ReviewDeskResult, generated
       review.acceptanceChecklist.map((item) => `${item.status}: ${item.criterion} - ${item.notes}`),
     ),
     ...listSection("Suggested Smoke Tests", review.suggestedSmokeTests),
-    ...(review.codexFixBrief
+    ...(review.verdict === "Needs Codex Fixes" && review.codexFixBrief
       ? [
           heading(3, "Draft Codex Fix Brief"),
           ...paragraph(review.codexFixBrief.summary),
