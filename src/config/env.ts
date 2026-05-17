@@ -19,6 +19,8 @@ const optionalNonEmptyString = z.preprocess((value) => {
 export const AppEnvSchema = z.object({
   AGENT_OFFICE_API_KEY: optionalNonEmptyString,
   AGENT_OFFICE_APPROVAL_SECRET: optionalNonEmptyString,
+  ANTHROPIC_API_KEY: optionalNonEmptyString,
+  CLAUDE_REVIEW_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
   DRY_RUN: stringBoolean.default(false),
   GITHUB_ALLOWED_BRANCH_PREFIXES: z.string().min(1).default("agent-office/,codex/"),
   GITHUB_ALLOWED_REPOS: optionalNonEmptyString,
@@ -46,6 +48,8 @@ export const AppEnvSchema = z.object({
   PRODUCT_CONTEXT_MAX_NOTION_CHARS: z.coerce.number().int().min(1000).max(50000).default(16000),
   PRODUCT_CONTEXT_MAX_TOTAL_CHARS: z.coerce.number().int().min(2000).max(80000).default(32000),
   PRODUCT_CONTEXT_PAGE_ID: optionalNonEmptyString,
+  REVIEW_DESK_MAX_CHANGED_FILES: z.coerce.number().int().min(1).max(100).default(30),
+  REVIEW_DESK_MAX_PATCH_CHARS: z.coerce.number().int().min(500).max(40000).default(8000),
   RUN_LOG_PATH: z.string().min(1).default("data/run-log.jsonl"),
   TARGET_PRODUCT_REPO: z.string().min(1).default("Chief of Staff app product repo (set TARGET_PRODUCT_REPO)"),
 });

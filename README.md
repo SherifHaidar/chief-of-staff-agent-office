@@ -217,6 +217,15 @@ curl -X POST http://127.0.0.1:3000/agent-office/github/implementation/approve \
   -d '{"approvalToken":"<implementation-approval-token>"}'
 ```
 
+Run Review + Iteration Desk v0 for an implementation PR:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/review-desk \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"repository":"SherifHaidar/personal-chief-of-staff","pullRequestNumber":6,"taskId":"<notion-task-id>"}'
+```
+
 Batch dry-run architecture-ready tasks:
 
 ```bash
@@ -241,12 +250,23 @@ Required for GitHub Draft PR Prep and Controlled Implementation:
 - `GITHUB_APP_ID`
 - `GITHUB_APP_INSTALLATION_ID`
 - `GITHUB_APP_PRIVATE_KEY`
-- `GITHUB_ALLOWED_REPOS=SherifHaidar/personal-chief-of-staff`
+- `GITHUB_ALLOWED_REPOS=SherifHaidar/personal-chief-of-staff,SherifHaidar/chief-of-staff-agent-office`
 - `GITHUB_ALLOWED_BRANCH_PREFIXES=agent-office/,codex/`
 - `GITHUB_DEFAULT_BASE_BRANCH=main`
 - `IMPLEMENTATION_MAX_CHANGED_FILES=4`
 - `IMPLEMENTATION_MAX_FILE_CHARS=16000`
 - `IMPLEMENTATION_MAX_TOTAL_CHANGE_CHARS=32000`
+
+Required for Review + Iteration Desk v0:
+
+- `ANTHROPIC_API_KEY`
+- `CLAUDE_REVIEW_MODEL=claude-sonnet-4-6`
+- `GITHUB_APP_ID`
+- `GITHUB_APP_INSTALLATION_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_ALLOWED_REPOS` must include every repo being reviewed, for example `SherifHaidar/personal-chief-of-staff,SherifHaidar/chief-of-staff-agent-office`
+- `REVIEW_DESK_MAX_CHANGED_FILES=30`
+- `REVIEW_DESK_MAX_PATCH_CHARS=8000`
 
 Required for Product Context Pack:
 
@@ -272,7 +292,7 @@ Recommended explicit configuration:
 
 Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. The approval secret signs short-lived approval tokens and should be different from the API key.
 
-The GitHub App should be installed only on `SherifHaidar/personal-chief-of-staff` for this v0 and should have `Metadata: read`, `Contents: read/write`, `Pull requests: read/write`, and check/status read access if available. Product Context Pack uses the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, deployments, or settings permissions.
+The GitHub App should be installed only on repos Agent Office needs to prepare or review, currently `SherifHaidar/personal-chief-of-staff` and `SherifHaidar/chief-of-staff-agent-office`, and should have `Metadata: read`, `Contents: read/write`, `Pull requests: read/write`, and check/status/deployment read access if available. Product Context Pack and Review Desk use the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, or settings permissions.
 
 The Notion integration must be able to read the AI Build Tasks database, read task page content, read the product context page, append blocks to task pages, and update the configured status property.
 

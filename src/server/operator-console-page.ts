@@ -85,6 +85,7 @@ export function renderOperatorConsolePage(): string {
             <option value="architecture">Architecture Desk</option>
             <option value="codexHandoff">Codex Handoff Desk</option>
             <option value="implementationReady">Implementation Ready</option>
+            <option value="reviewDesk">Review + Iteration Desk</option>
           </select>
         </div>
         <div>
@@ -98,6 +99,16 @@ export function renderOperatorConsolePage(): string {
         </div>
         <div class="status" id="taskStatus"></div>
         <div class="tasks" id="taskList"></div>
+        <div class="panel stack" id="reviewDeskInputs" hidden>
+          <div>
+            <label for="reviewRepo">Review repo</label>
+            <input id="reviewRepo" autocomplete="off" placeholder="owner/name">
+          </div>
+          <div>
+            <label for="reviewPrNumber">PR number</label>
+            <input id="reviewPrNumber" inputmode="numeric" autocomplete="off" placeholder="20">
+          </div>
+        </div>
       </section>
 
       <section class="stack">
@@ -168,6 +179,13 @@ export function renderOperatorConsolePage(): string {
         readyLabel: "In Codex / Implementation Ready",
         taskEndpoint: "/agent-office/tasks/implementation-ready",
         workflowName: "Implementation Ready"
+      },
+      reviewDesk: {
+        previewButtonLabel: "Run review",
+        previewTitle: "Review + Iteration Desk",
+        readyLabel: "Implementation task",
+        taskEndpoint: "/agent-office/tasks/implementation-ready",
+        workflowName: "Review + Iteration Desk"
       }
     };
 
@@ -182,6 +200,7 @@ export function renderOperatorConsolePage(): string {
       implementationProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
       productContext: null,
+      reviewDeskResult: null,
       revisionNumber: 0,
       selectedTask: null,
       tasks: []
@@ -212,6 +231,9 @@ export function renderOperatorConsolePage(): string {
     const reviseButton = document.getElementById("reviseButton");
     const revisionFeedback = document.getElementById("revisionFeedback");
     const revisionPanel = document.getElementById("revisionPanel");
+    const reviewDeskInputs = document.getElementById("reviewDeskInputs");
+    const reviewPrNumber = document.getElementById("reviewPrNumber");
+    const reviewRepo = document.getElementById("reviewRepo");
     const saveKeyButton = document.getElementById("saveKeyButton");
     const selectedTaskMeta = document.getElementById("selectedTaskMeta");
     const selectedTaskTitle = document.getElementById("selectedTaskTitle");
@@ -239,13 +261,18 @@ export function renderOperatorConsolePage(): string {
       return state.mode === "implementationReady";
     }
 
+    function isReviewDeskMode() {
+      return state.mode === "reviewDesk";
+    }
+
     function syncControlsForMode() {
       previewButton.hidden = isImplementationReadyMode();
-      approveButton.hidden = isImplementationReadyMode();
+      approveButton.hidden = isImplementationReadyMode() || isReviewDeskMode();
       githubPreviewButton.hidden = !isCodexHandoffMode();
       githubApproveButton.hidden = !isCodexHandoffMode();
       implementationPreviewButton.hidden = !isImplementationReadyMode();
       implementationApproveButton.hidden = !isImplementationReadyMode();
+      reviewDeskInputs.hidden = !isReviewDeskMode();
       previewButton.textContent = activeDesk().previewButtonLabel;
     }
 
@@ -286,6 +313,7 @@ export function renderOperatorConsolePage(): string {
       state.implementationApproval = null;
       state.implementationProposal = null;
       state.productContext = null;
+      state.reviewDeskResult = null;
       state.revisionNumber = 0;
       state.selectedTask = null;
       state.tasks = [];
@@ -336,6 +364,7 @@ export function renderOperatorConsolePage(): string {
       state.implementationApproval = null;
       state.implementationProposal = null;
       state.productContext = null;
+      state.reviewDeskResult = null;
       state.revisionNumber = 0;
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
@@ -356,6 +385,11 @@ export function renderOperatorConsolePage(): string {
     }
 
     function renderArtifact(artifact) {
+      if (isReviewDeskMode()) {
+        renderReviewDeskResult(artifact);
+        return;
+      }
+
       if (isCodexHandoffMode()) {
         renderCodexHandoff(artifact);
         return;
@@ -402,6 +436,23 @@ export function renderOperatorConsolePage(): string {
         '<h3>Product Intent</h3><p>' + escapeHtml(handoff.productIntent) + '</p>',
         sections.map(function (section) { return renderList(section[0], section[1]); }).join(""),
         '<h3>Suggested PR Body</h3><p>' + escapeHtml(handoff.suggestedPrBody) + '</p>'
+      ].join("");
+    }
+
+    function renderReviewDeskResult(result) {
+      const review = result.review;
+      const evidence = result.evidence;
+      briefPreview.innerHTML = [
+        '<div class="brief-title">' + escapeHtml(review.verdict) + '</div>',
+        '<p>' + escapeHtml(review.summary) + '</p>',
+        '<p><strong>PR:</strong> ' + escapeHtml(evidence.pullRequest.repository) + '#' + escapeHtml(evidence.pullRequest.pullRequestNumber) + '</p>',
+        '<p><strong>Approval boundary:</strong> ' + escapeHtml(result.finalApprovalWarning) + '</p>',
+        renderList('Deterministic Gates', (evidence.policyFindings || []).map(function (finding) { return finding.severity + ': ' + finding.message; })),
+        renderList('Risks', review.risks),
+        renderList('Missing Evidence', review.missingEvidence),
+        renderList('Acceptance Checklist', (review.acceptanceChecklist || []).map(function (item) { return item.status + ': ' + item.criterion + ' - ' + item.notes; })),
+        renderList('Suggested Smoke Tests', review.suggestedSmokeTests),
+        review.codexFixBrief ? '<h3>Draft Codex Fix Brief</h3><p>' + escapeHtml(review.codexFixBrief.summary) + '</p>' + renderList('Fix Instructions', review.codexFixBrief.instructions) + renderList('Verification', review.codexFixBrief.verification) : ''
       ].join("");
     }
 
@@ -534,7 +585,31 @@ export function renderOperatorConsolePage(): string {
         githubApproveButton.disabled = true;
         implementationPreviewButton.disabled = true;
         implementationApproveButton.disabled = true;
-        setStatus(previewStatus, "Generating preview...");
+        setStatus(previewStatus, isReviewDeskMode() ? "Running review..." : "Generating preview...");
+        if (isReviewDeskMode()) {
+          const repo = reviewRepo.value.trim();
+          const prNumber = Number(reviewPrNumber.value.trim());
+          if (!repo || !Number.isInteger(prNumber) || prNumber <= 0) {
+            throw new Error("Review repo and PR number are required.");
+          }
+          const payload = await agentFetch("/agent-office/review-desk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pullRequestNumber: prNumber,
+              repository: repo,
+              taskId: state.selectedTask.taskId
+            })
+          });
+          state.reviewDeskResult = payload.result;
+          renderReviewDeskResult(payload.result);
+          approvalPanel.hidden = true;
+          revisionPanel.hidden = true;
+          approveButton.disabled = true;
+          setStatus(previewStatus, "Review packet written to Notion.", "ok");
+          showResult(payload.run);
+          return;
+        }
         const body = isArchitectureMode()
           ? { taskId: state.selectedTask.taskId, dryRun: true }
           : { taskId: state.selectedTask.taskId };

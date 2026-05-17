@@ -4,6 +4,7 @@ import type { ArchitectBriefWritebackMetadata } from "../domain/architect-brief-
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
+import type { ReviewDeskResult } from "../domain/review-desk.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
 import { parseLatestCodexHandoffBrief } from "./codex-handoff-brief-parser.js";
@@ -13,6 +14,7 @@ import {
   renderCodexHandoffBriefBlocks,
   renderGitHubDraftPrResultBlocks,
   renderImplementationResultBlocks,
+  renderReviewDeskResultBlocks,
 } from "./notion-block-renderer.js";
 import type { NotionClientLike, NotionTaskRepositoryConfig } from "./notion-types.js";
 
@@ -308,6 +310,18 @@ export class NotionTaskRepository {
   ): Promise<void> {
     const normalizedPageId = normalizeNotionPageId(pageId);
     const blocks = renderImplementationResultBlocks(result, proposal, generatedAt);
+
+    for (const chunk of chunkBlocks(blocks)) {
+      await this.client.blocks.children.append({
+        block_id: normalizedPageId,
+        children: chunk,
+      });
+    }
+  }
+
+  async appendReviewDeskResult(pageId: string, result: ReviewDeskResult, generatedAt: Date): Promise<void> {
+    const normalizedPageId = normalizeNotionPageId(pageId);
+    const blocks = renderReviewDeskResultBlocks(result, generatedAt);
 
     for (const chunk of chunkBlocks(blocks)) {
       await this.client.blocks.children.append({

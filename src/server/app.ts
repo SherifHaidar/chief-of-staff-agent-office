@@ -33,6 +33,7 @@ import { createRunId } from "../audit/run-summary.js";
 import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
+import { ReviewDeskInputSchema } from "../domain/review-desk.js";
 import type {
   ApprovedArchitectBriefWritebackInput,
   ArchitectBriefRevisionInput,
@@ -53,6 +54,7 @@ import type {
   ImplementationPreviewInput,
   ImplementationWorkflowResult,
 } from "../workflows/implementation.workflow.js";
+import type { ReviewDeskWorkflowResult } from "../workflows/review-desk.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
 import { renderOperatorConsolePage } from "./operator-console-page.js";
 
@@ -114,6 +116,10 @@ export type ApprovedImplementationWriter = {
   createApprovedImplementation(input: ApprovedImplementationInput): Promise<ImplementationWorkflowResult>;
 };
 
+export type ReviewDeskWorkflowRunner = {
+  run(input: z.infer<typeof ReviewDeskInputSchema>): Promise<ReviewDeskWorkflowResult>;
+};
+
 export type AgentOfficeAppOptions = {
   apiKey: string;
   approvalSecret: string;
@@ -127,6 +133,7 @@ export type AgentOfficeAppOptions = {
   implementationWorkflow?: ImplementationWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   readyCodexScanner?: ReadyCodexTaskScanner;
+  reviewDeskWorkflow?: ReviewDeskWorkflowRunner;
   runLog?: RunLog;
   statusAfterCodexHandoff?: string;
   statusAfterWriteback: string;
@@ -138,6 +145,7 @@ type AnyWorkflowResult =
   | CodexHandoffWorkflowResult
   | GitHubDraftPrWorkflowResult
   | ImplementationWorkflowResult
+  | ReviewDeskWorkflowResult
   | WorkflowResult;
 
 const ArchitectReviewRequestSchema = z
@@ -314,6 +322,10 @@ function resultHasBrief(result: AnyWorkflowResult): boolean {
 
   if ("handoff" in result) {
     return Boolean(result.handoff);
+  }
+
+  if ("result" in result) {
+    return Boolean(result.result.review);
   }
 
   return Boolean(result.proposal);
@@ -1358,6 +1370,48 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       github: result.github,
       implementationWorkOrderPrCreated: true,
       ok: true,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/review-desk", async (request, reply) => {
+    const parsed = ReviewDeskInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = requireConfiguredFeature(options.reviewDeskWorkflow, "Review + Iteration Desk workflow");
+    const startedAt = new Date();
+    const result = await workflow.run(parsed.data);
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "review-desk",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      result: result.result,
       run,
       taskId: result.pageId,
     });
