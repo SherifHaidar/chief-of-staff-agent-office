@@ -107,7 +107,7 @@ describe("AnthropicClaudeReviewRunner", () => {
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
 
     expect(requestBody.messages[0].content).toContain("Chief of Staff do-not-break flows");
-    expect(requestBody.messages[0].content).toContain("no broad Daily Capture digests to Weekly To-do");
+    expect(requestBody.messages[0].content).toContain("do not append broad Daily Capture digests to Weekly To-do");
     expect(requestBody.messages[0].content).toContain("Standalone memory confirmation supports short yes replies");
     expect(requestBody.messages[0].content).toContain("Do not include codexFixBrief unless the final verdict is Needs Codex Fixes.");
   });
