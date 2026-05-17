@@ -86,15 +86,18 @@ function getMissingReviewDeskConfiguration(env: AppEnv): string[] {
 
 function createReviewDeskWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
   const apiKey = env.ANTHROPIC_API_KEY;
+  const appId = env.GITHUB_APP_ID;
+  const installationId = env.GITHUB_APP_INSTALLATION_ID;
   const model = env.CLAUDE_REVIEW_MODEL;
-  if (getMissingReviewDeskConfiguration(env).length > 0 || !apiKey || !model) {
+  const privateKey = env.GITHUB_APP_PRIVATE_KEY;
+  if (getMissingReviewDeskConfiguration(env).length > 0 || !apiKey || !appId || !installationId || !model || !privateKey) {
     return undefined;
   }
 
   const githubClient = new GitHubAppClient({
-    appId: env.GITHUB_APP_ID,
-    installationId: env.GITHUB_APP_INSTALLATION_ID,
-    privateKey: env.GITHUB_APP_PRIVATE_KEY,
+    appId,
+    installationId,
+    privateKey,
   });
   const reviewDeskService = new ReviewDeskService(githubClient, {
     allowedRepositories: parseCsvList(env.GITHUB_ALLOWED_REPOS, [env.TARGET_PRODUCT_REPO]),
