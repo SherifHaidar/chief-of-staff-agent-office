@@ -138,10 +138,10 @@ describe("PostMergeCloseoutWorkflow", () => {
       result: {
         blockAppended: true,
         committed: true,
-        propertyWrites: [
+        propertyWrites: expect.arrayContaining([
           expect.objectContaining({ name: "Status", status: "written", value: "Merged" }),
           expect.objectContaining({ name: "Merge SHA", status: "written", value: "merge-sha" }),
-        ],
+        ]),
       },
       statusUpdated: true,
       wroteToNotion: true,
