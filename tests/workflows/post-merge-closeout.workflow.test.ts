@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AiBuildTask } from "../../src/domain/ai-build-task.js";
-import type { PostMergeCloseoutEvidence, PostMergeCloseoutPlan } from "../../src/domain/post-merge-closeout.js";
+import type {
+  PostMergeCloseoutEvidence,
+  PostMergeCloseoutPlan,
+  PostMergeCloseoutPropertyWrite,
+} from "../../src/domain/post-merge-closeout.js";
 import type { PostMergeCloseoutService } from "../../src/github/post-merge-closeout.service.js";
 import {
   PostMergeCloseoutWorkflow,
@@ -83,8 +87,13 @@ function createRepository(overrides: Partial<PostMergeCloseoutTaskRepository> = 
       return plan;
     }),
     fetchTask: vi.fn().mockResolvedValue(task),
-    writePostMergeCloseoutProperties: vi.fn((_, plan) =>
-      Promise.resolve(plan.propertyWrites.map((write) => (write.status === "planned" ? { ...write, status: "written" } : write))),
+    writePostMergeCloseoutProperties: vi.fn((_: string, plan: PostMergeCloseoutPlan) =>
+      Promise.resolve(
+        plan.propertyWrites.map(
+          (write): PostMergeCloseoutPropertyWrite =>
+            write.status === "planned" ? { ...write, status: "written" } : write,
+        ),
+      ),
     ),
     ...overrides,
   };
