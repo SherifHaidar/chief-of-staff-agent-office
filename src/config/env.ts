@@ -37,6 +37,7 @@ export const AppEnvSchema = z.object({
   NOTION_READY_FOR_CODEX_STATUS: z.string().min(1).default("Ready for Codex"),
   NOTION_STATUS_AFTER_ARCHITECT: z.string().min(1).default("Ready for Codex"),
   NOTION_STATUS_AFTER_CODEX_HANDOFF: optionalNonEmptyString.default("In Codex"),
+  NOTION_STATUS_AFTER_POST_MERGE_CLOSEOUT: z.string().min(1).default("Merged"),
   NOTION_STATUS_PROPERTY: z.string().min(1).default("Status"),
   NOTION_STATUS_PROPERTY_TYPE: z.enum(["status", "select"]).default("select"),
   NOTION_TASK_DATABASE_ID: z.string().optional(),

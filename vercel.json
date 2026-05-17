@@ -62,6 +62,14 @@
       "destination": "/api/agent-office/review-desk"
     },
     {
+      "source": "/agent-office/post-merge-closeout/preview",
+      "destination": "/api/agent-office/post-merge-closeout/preview"
+    },
+    {
+      "source": "/agent-office/post-merge-closeout/commit",
+      "destination": "/api/agent-office/post-merge-closeout/commit"
+    },
+    {
       "source": "/agent-office/run-ready-architecture",
       "destination": "/api/agent-office/run-ready-architecture"
     }

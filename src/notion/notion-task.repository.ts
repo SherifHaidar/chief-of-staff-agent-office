@@ -4,6 +4,13 @@ import type { ArchitectBriefWritebackMetadata } from "../domain/architect-brief-
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
+import type {
+  PostMergeCloseoutEvidence,
+  PostMergeCloseoutPlan,
+  PostMergeCloseoutPropertyWrite,
+  PostMergeCloseoutResult,
+} from "../domain/post-merge-closeout.js";
+import { createPostMergeCloseoutPlan } from "../domain/post-merge-closeout.js";
 import type { ReviewDeskResult } from "../domain/review-desk.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
@@ -14,6 +21,7 @@ import {
   renderCodexHandoffBriefBlocks,
   renderGitHubDraftPrResultBlocks,
   renderImplementationResultBlocks,
+  renderPostMergeCloseoutBlocks,
   renderReviewDeskResultBlocks,
 } from "./notion-block-renderer.js";
 import type { NotionClientLike, NotionTaskRepositoryConfig } from "./notion-types.js";
@@ -322,6 +330,53 @@ export class NotionTaskRepository {
   async appendReviewDeskResult(pageId: string, result: ReviewDeskResult, generatedAt: Date): Promise<void> {
     const normalizedPageId = normalizeNotionPageId(pageId);
     const blocks = renderReviewDeskResultBlocks(result, generatedAt);
+
+    for (const chunk of chunkBlocks(blocks)) {
+      await this.client.blocks.children.append({
+        block_id: normalizedPageId,
+        children: chunk,
+      });
+    }
+  }
+
+  createPostMergeCloseoutPlan(input: {
+    evidence: PostMergeCloseoutEvidence;
+    mergedStatusName: string;
+    task: AiBuildTask;
+  }): PostMergeCloseoutPlan {
+    return createPostMergeCloseoutPlan({
+      evidence: input.evidence,
+      mergedStatusName: input.mergedStatusName,
+      statusPropertyName: this.config.statusPropertyName,
+      statusPropertyType: this.config.statusPropertyType,
+      task: input.task,
+    });
+  }
+
+  async writePostMergeCloseoutProperties(pageId: string, plan: PostMergeCloseoutPlan): Promise<PostMergeCloseoutPropertyWrite[]> {
+    const normalizedPageId = normalizeNotionPageId(pageId);
+    const properties = Object.fromEntries(
+      plan.propertyWrites
+        .filter((write) => write.status === "planned" && write.update)
+        .map((write) => [write.name, write.update as Record<string, unknown>]),
+    );
+    const propertyWrites = plan.propertyWrites.map((write): PostMergeCloseoutPropertyWrite =>
+      write.status === "planned" && write.update ? { ...write, status: "written" } : write,
+    );
+
+    if (Object.keys(properties).length > 0) {
+      await this.client.pages.update({
+        page_id: normalizedPageId,
+        properties,
+      });
+    }
+
+    return propertyWrites;
+  }
+
+  async appendPostMergeCloseoutResult(pageId: string, result: PostMergeCloseoutResult, generatedAt: Date): Promise<void> {
+    const normalizedPageId = normalizeNotionPageId(pageId);
+    const blocks = renderPostMergeCloseoutBlocks(result, generatedAt);
 
     for (const chunk of chunkBlocks(blocks)) {
       await this.client.blocks.children.append({

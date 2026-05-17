@@ -5,6 +5,7 @@ export type AgentOfficeWorkflow =
   | "codex-handoff"
   | "github-draft-pr-prep"
   | "implementation"
+  | "post-merge-closeout"
   | "review-desk";
 
 export type AgentOfficeRunSummary = {
