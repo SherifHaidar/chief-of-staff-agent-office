@@ -58,6 +58,10 @@
       "destination": "/api/agent-office/github/implementation/approve"
     },
     {
+      "source": "/agent-office/review-desk",
+      "destination": "/api/agent-office/review-desk"
+    },
+    {
       "source": "/agent-office/run-ready-architecture",
       "destination": "/api/agent-office/run-ready-architecture"
     }

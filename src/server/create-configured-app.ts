@@ -1,9 +1,11 @@
 import { JsonlRunLog } from "../audit/run-log.js";
+import { AnthropicClaudeReviewRunner } from "../agents/claude-review.agent.js";
 import type { AppEnv } from "../config/env.js";
 import { GitHubAppClient } from "../github/github-app-client.js";
 import { GitHubDraftPrService } from "../github/github-draft-pr.service.js";
 import { ImplementationService } from "../github/implementation.service.js";
 import { parseCsvList } from "../github/github-policy.js";
+import { ReviewDeskService } from "../github/review-desk.service.js";
 import {
   createArchitectTaskWorkflow,
   createCodexHandoffWorkflow,
@@ -12,6 +14,7 @@ import {
 import { consoleLogger } from "../utils/logger.js";
 import { GitHubDraftPrWorkflow } from "../workflows/github-draft-pr.workflow.js";
 import { ImplementationWorkflow } from "../workflows/implementation.workflow.js";
+import { ReviewDeskWorkflow } from "../workflows/review-desk.workflow.js";
 import { createAgentOfficeApp } from "./app.js";
 
 export function requiredServerConfig(value: string | undefined, name: string): string {
@@ -71,6 +74,49 @@ function createImplementationWorkflowIfConfigured(env: AppEnv, taskRepository: R
   });
 }
 
+function getMissingReviewDeskConfiguration(env: AppEnv): string[] {
+  return [
+    env.GITHUB_APP_ID ? undefined : "GITHUB_APP_ID",
+    env.GITHUB_APP_INSTALLATION_ID ? undefined : "GITHUB_APP_INSTALLATION_ID",
+    env.GITHUB_APP_PRIVATE_KEY ? undefined : "GITHUB_APP_PRIVATE_KEY",
+    env.ANTHROPIC_API_KEY ? undefined : "ANTHROPIC_API_KEY",
+    env.CLAUDE_REVIEW_MODEL ? undefined : "CLAUDE_REVIEW_MODEL",
+  ].filter((value): value is string => Boolean(value));
+}
+
+function createReviewDeskWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  const appId = env.GITHUB_APP_ID;
+  const installationId = env.GITHUB_APP_INSTALLATION_ID;
+  const model = env.CLAUDE_REVIEW_MODEL;
+  const privateKey = env.GITHUB_APP_PRIVATE_KEY;
+  if (getMissingReviewDeskConfiguration(env).length > 0 || !apiKey || !appId || !installationId || !model || !privateKey) {
+    return undefined;
+  }
+
+  const githubClient = new GitHubAppClient({
+    appId,
+    installationId,
+    privateKey,
+  });
+  const reviewDeskService = new ReviewDeskService(githubClient, {
+    allowedRepositories: parseCsvList(env.GITHUB_ALLOWED_REPOS, [env.TARGET_PRODUCT_REPO]),
+    maxChangedFiles: env.REVIEW_DESK_MAX_CHANGED_FILES,
+    maxPatchChars: env.REVIEW_DESK_MAX_PATCH_CHARS,
+  });
+  const reviewer = new AnthropicClaudeReviewRunner({
+    apiKey,
+    model,
+  });
+
+  return new ReviewDeskWorkflow({
+    logger: consoleLogger,
+    reviewDeskService,
+    reviewer,
+    taskRepository,
+  });
+}
+
 export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const apiKey = requiredServerConfig(env.AGENT_OFFICE_API_KEY, "AGENT_OFFICE_API_KEY");
   const approvalSecret = requiredServerConfig(env.AGENT_OFFICE_APPROVAL_SECRET, "AGENT_OFFICE_APPROVAL_SECRET");
@@ -80,6 +126,8 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const codexHandoffWorkflow = createCodexHandoffWorkflow(env);
   const githubDraftPrWorkflow = createGitHubDraftPrWorkflowIfConfigured(env, taskRepository);
   const implementationWorkflow = createImplementationWorkflowIfConfigured(env, taskRepository);
+  const missingReviewDeskConfiguration = getMissingReviewDeskConfiguration(env);
+  const reviewDeskWorkflow = createReviewDeskWorkflowIfConfigured(env, taskRepository);
   const implementationReadyStatus = env.NOTION_STATUS_AFTER_CODEX_HANDOFF ?? "In Codex";
 
   return createAgentOfficeApp({
@@ -120,6 +168,11 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
         }),
       hasCodexHandoffBrief: (taskId) => taskRepository.hasCodexHandoffBrief(taskId),
     },
+    reviewDeskConfigurationMessage:
+      missingReviewDeskConfiguration.length > 0
+        ? `Review + Iteration Desk is blocked until this configuration is set: ${missingReviewDeskConfiguration.join(", ")}.`
+        : undefined,
+    reviewDeskWorkflow,
     runLog: new JsonlRunLog(env.RUN_LOG_PATH),
     statusAfterCodexHandoff: env.NOTION_STATUS_AFTER_CODEX_HANDOFF,
     statusAfterWriteback: env.NOTION_STATUS_AFTER_ARCHITECT,
