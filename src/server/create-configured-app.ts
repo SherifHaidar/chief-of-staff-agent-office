@@ -74,8 +74,20 @@ function createImplementationWorkflowIfConfigured(env: AppEnv, taskRepository: R
   });
 }
 
+function getMissingReviewDeskConfiguration(env: AppEnv): string[] {
+  return [
+    env.GITHUB_APP_ID ? undefined : "GITHUB_APP_ID",
+    env.GITHUB_APP_INSTALLATION_ID ? undefined : "GITHUB_APP_INSTALLATION_ID",
+    env.GITHUB_APP_PRIVATE_KEY ? undefined : "GITHUB_APP_PRIVATE_KEY",
+    env.ANTHROPIC_API_KEY ? undefined : "ANTHROPIC_API_KEY",
+    env.CLAUDE_REVIEW_MODEL ? undefined : "CLAUDE_REVIEW_MODEL",
+  ].filter((value): value is string => Boolean(value));
+}
+
 function createReviewDeskWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
-  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_INSTALLATION_ID || !env.GITHUB_APP_PRIVATE_KEY || !env.ANTHROPIC_API_KEY) {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  const model = env.CLAUDE_REVIEW_MODEL;
+  if (getMissingReviewDeskConfiguration(env).length > 0 || !apiKey || !model) {
     return undefined;
   }
 
@@ -90,8 +102,8 @@ function createReviewDeskWorkflowIfConfigured(env: AppEnv, taskRepository: Retur
     maxPatchChars: env.REVIEW_DESK_MAX_PATCH_CHARS,
   });
   const reviewer = new AnthropicClaudeReviewRunner({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: env.CLAUDE_REVIEW_MODEL,
+    apiKey,
+    model,
   });
 
   return new ReviewDeskWorkflow({
@@ -111,6 +123,7 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const codexHandoffWorkflow = createCodexHandoffWorkflow(env);
   const githubDraftPrWorkflow = createGitHubDraftPrWorkflowIfConfigured(env, taskRepository);
   const implementationWorkflow = createImplementationWorkflowIfConfigured(env, taskRepository);
+  const missingReviewDeskConfiguration = getMissingReviewDeskConfiguration(env);
   const reviewDeskWorkflow = createReviewDeskWorkflowIfConfigured(env, taskRepository);
   const implementationReadyStatus = env.NOTION_STATUS_AFTER_CODEX_HANDOFF ?? "In Codex";
 
@@ -152,6 +165,10 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
         }),
       hasCodexHandoffBrief: (taskId) => taskRepository.hasCodexHandoffBrief(taskId),
     },
+    reviewDeskConfigurationMessage:
+      missingReviewDeskConfiguration.length > 0
+        ? `Review + Iteration Desk is blocked until this configuration is set: ${missingReviewDeskConfiguration.join(", ")}.`
+        : undefined,
     reviewDeskWorkflow,
     runLog: new JsonlRunLog(env.RUN_LOG_PATH),
     statusAfterCodexHandoff: env.NOTION_STATUS_AFTER_CODEX_HANDOFF,

@@ -133,6 +133,7 @@ export type AgentOfficeAppOptions = {
   implementationWorkflow?: ImplementationWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   readyCodexScanner?: ReadyCodexTaskScanner;
+  reviewDeskConfigurationMessage?: string;
   reviewDeskWorkflow?: ReviewDeskWorkflowRunner;
   runLog?: RunLog;
   statusAfterCodexHandoff?: string;
@@ -1386,7 +1387,18 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       });
     }
 
-    const workflow = requireConfiguredFeature(options.reviewDeskWorkflow, "Review + Iteration Desk workflow");
+    const workflow = options.reviewDeskWorkflow;
+    if (!workflow) {
+      return reply.code(503).send({
+        error:
+          options.reviewDeskConfigurationMessage ??
+          "Review + Iteration Desk is not configured. Configure ANTHROPIC_API_KEY and GitHub App credentials before live review.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
     const startedAt = new Date();
     const result = await workflow.run(parsed.data);
     const run = buildRunSummary({

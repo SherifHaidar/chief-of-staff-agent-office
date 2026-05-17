@@ -53,7 +53,13 @@ const reviewDeskResult: ReviewDeskResult = {
   },
 };
 
-function createTestApp(input: { reviewDeskWorkflow?: ReviewDeskWorkflowRunner; runLog?: InMemoryRunLog } = {}) {
+function createTestApp(
+  input: {
+    reviewDeskConfigurationMessage?: string;
+    reviewDeskWorkflow?: ReviewDeskWorkflowRunner;
+    runLog?: InMemoryRunLog;
+  } = {},
+) {
   return createAgentOfficeApp({
     apiKey,
     approvalSecret,
@@ -62,6 +68,7 @@ function createTestApp(input: { reviewDeskWorkflow?: ReviewDeskWorkflowRunner; r
       findReadyForArchitectureTasks: vi.fn().mockResolvedValue([]),
       hasArchitectBrief: vi.fn().mockResolvedValue(false),
     },
+    reviewDeskConfigurationMessage: input.reviewDeskConfigurationMessage,
     reviewDeskWorkflow: input.reviewDeskWorkflow,
     runLog: input.runLog,
     statusAfterWriteback: "Ready for Codex",
@@ -145,5 +152,36 @@ describe("Review Desk API", () => {
 
     await app.close();
   });
-});
 
+  it("returns a blocked configuration response when Review Desk is not wired", async () => {
+    const runLog = new InMemoryRunLog();
+    const app = createTestApp({
+      reviewDeskConfigurationMessage:
+        "Review + Iteration Desk is blocked until this configuration is set: ANTHROPIC_API_KEY, CLAUDE_REVIEW_MODEL.",
+      runLog,
+    });
+
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: {
+        pullRequestNumber: 20,
+        repository: "SherifHaidar/chief-of-staff-agent-office",
+        taskId: pageId,
+      },
+      url: "/agent-office/review-desk",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error:
+        "Review + Iteration Desk is blocked until this configuration is set: ANTHROPIC_API_KEY, CLAUDE_REVIEW_MODEL.",
+      ok: false,
+      status: "blocked",
+      taskId: pageId,
+    });
+    expect(runLog.records).toHaveLength(0);
+
+    await app.close();
+  });
+});

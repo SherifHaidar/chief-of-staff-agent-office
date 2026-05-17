@@ -20,7 +20,7 @@ export const AppEnvSchema = z.object({
   AGENT_OFFICE_API_KEY: optionalNonEmptyString,
   AGENT_OFFICE_APPROVAL_SECRET: optionalNonEmptyString,
   ANTHROPIC_API_KEY: optionalNonEmptyString,
-  CLAUDE_REVIEW_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+  CLAUDE_REVIEW_MODEL: optionalNonEmptyString,
   DRY_RUN: stringBoolean.default(false),
   GITHUB_ALLOWED_BRANCH_PREFIXES: z.string().min(1).default("agent-office/,codex/"),
   GITHUB_ALLOWED_REPOS: optionalNonEmptyString,

@@ -300,9 +300,10 @@ export class ReviewDeskService {
       for (const deployment of response.slice(0, 5)) {
         const statuses = await this.fetchDeploymentStatuses(repository, deployment.id, collectionWarnings);
         const latestStatus = statuses[0];
+        const latestState = latestStatus?.conclusion ?? latestStatus?.status;
         deployments.push({
           ...(deployment.environment ? { environment: deployment.environment } : {}),
-          ...(latestStatus?.state ? { state: latestStatus.state } : {}),
+          ...(latestState ? { state: latestState } : {}),
           statuses,
           ...(latestStatus?.detailsUrl ? { url: latestStatus.detailsUrl } : {}),
         });
