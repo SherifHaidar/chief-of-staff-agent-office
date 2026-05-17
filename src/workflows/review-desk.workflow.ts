@@ -131,6 +131,11 @@ function createEvidencePacket(input: {
 
 function createInvalidClaudeReview(input: { error: unknown; evidence: ReviewDeskEvidencePacket }): ClaudeReviewPacket {
   const message = serializeError(input.error).message;
+  const isConfigurationError =
+    message.includes("CLAUDE_REVIEW_MODEL") ||
+    message.includes("Claude review model is unavailable") ||
+    message.includes("HTTP 401") ||
+    message.includes("HTTP 403");
 
   return {
     acceptanceChecklist: input.evidence.workOrder.acceptanceCriteria.map((criterion) => ({
@@ -139,9 +144,15 @@ function createInvalidClaudeReview(input: { error: unknown; evidence: ReviewDesk
       status: "unclear",
     })),
     missingEvidence: [`Claude structured review failed: ${message}`],
-    risks: ["Review could not trust model output because it was invalid or unavailable."],
+    risks: [
+      isConfigurationError
+        ? "Review could not run because Claude review configuration was unavailable or rejected."
+        : "Review could not trust model output because it was invalid or unavailable.",
+    ],
     suggestedSmokeTests: [],
-    summary: "Review blocked because Claude structured review did not produce valid output.",
+    summary: isConfigurationError
+      ? "Review blocked because Claude review configuration is invalid or unavailable."
+      : "Review blocked because Claude structured review did not produce valid output.",
     verdict: "Blocked",
   };
 }
@@ -233,4 +244,3 @@ export class ReviewDeskWorkflow {
     }
   }
 }
-

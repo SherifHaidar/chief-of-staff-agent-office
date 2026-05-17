@@ -157,5 +157,37 @@ describe("ReviewDeskWorkflow", () => {
       },
     });
   });
-});
 
+  it("blocks when Claude structured output is invalid", async () => {
+    const repository = createRepository();
+    const workflow = new ReviewDeskWorkflow({
+      now: () => new Date("2026-05-17T10:00:00.000Z"),
+      reviewDeskService: createService(),
+      reviewer: {
+        review: vi.fn<ClaudeReviewRunner["review"]>().mockRejectedValue(
+          new Error("Claude structured review validation failed: verdict: invalid value"),
+        ),
+      },
+      taskRepository: repository,
+    });
+
+    const result = await workflow.run({
+      pullRequestNumber: 20,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        review: {
+          missingEvidence: [
+            "Claude structured review failed: Claude structured review validation failed: verdict: invalid value",
+          ],
+          verdict: "Blocked",
+        },
+      },
+    });
+    expect(repository.appendReviewDeskResult).toHaveBeenCalledOnce();
+  });
+});
