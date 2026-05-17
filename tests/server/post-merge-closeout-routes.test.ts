@@ -18,6 +18,7 @@ const closeoutResult: PostMergeCloseoutResult = {
     idempotency: "marker not present; closeout block can be appended",
     notionTaskTarget: `Post-Merge Closeout v0 (${pageId})`,
     properties: ["Status: planned select update"],
+    taskPrLink: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
   },
   evidence: {
     collectedAt: "2026-05-17T12:00:00.000Z",
@@ -65,6 +66,14 @@ const closeoutResult: PostMergeCloseoutResult = {
         value: "Merged",
       },
     ],
+    taskPrLinkCheck: {
+      message: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
+      propertyName: "PR Link",
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      status: "match",
+      value: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+    },
   },
   propertyWrites: [
     {

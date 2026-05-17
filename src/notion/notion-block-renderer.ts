@@ -272,6 +272,8 @@ export function renderPostMergeCloseoutBlocks(result: PostMergeCloseoutResult, g
     ...paragraph(result.plan.closeoutMarker),
     heading(3, "Pull Request"),
     ...paragraph(`${pullRequest.title}: ${pullRequest.url}`),
+    heading(3, "Selected Task PR Link Check"),
+    ...paragraph(result.plan.taskPrLinkCheck.message),
     heading(3, "Merge Evidence"),
     ...paragraph(
       [

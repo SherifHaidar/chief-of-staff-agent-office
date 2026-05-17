@@ -11,6 +11,7 @@ import type {
 import {
   createPostMergeCloseoutCommitResult,
   createPostMergeCloseoutPreview,
+  isPostMergeCloseoutTaskPrLinkBlocked,
 } from "../domain/post-merge-closeout.js";
 import type { PostMergeCloseoutService } from "../github/post-merge-closeout.service.js";
 import { serializeError } from "../utils/errors.js";
@@ -127,6 +128,10 @@ export class PostMergeCloseoutWorkflow {
           title: `Post-Merge Closeout: ${evidence.pullRequest.repository}#${evidence.pullRequest.pullRequestNumber}`,
           wroteToNotion: false,
         };
+      }
+
+      if (isPostMergeCloseoutTaskPrLinkBlocked(plan)) {
+        throw Object.assign(new Error(plan.taskPrLinkCheck.message), { statusCode: 409 });
       }
 
       const propertyWrites = await this.taskRepository.writePostMergeCloseoutProperties(pageId, plan);

@@ -6,6 +6,7 @@ import type {
   PostMergeCloseoutPlan,
   PostMergeCloseoutPropertyWrite,
 } from "../../src/domain/post-merge-closeout.js";
+import { createPostMergeCloseoutPlan } from "../../src/domain/post-merge-closeout.js";
 import type { PostMergeCloseoutService } from "../../src/github/post-merge-closeout.service.js";
 import {
   PostMergeCloseoutWorkflow,
@@ -41,6 +42,7 @@ const task: AiBuildTask = {
   pageId,
   properties: {
     "Merge SHA": { rich_text: [], type: "rich_text" },
+    "PR Link": { type: "url", url: null },
     Status: { select: { name: "In Codex" }, type: "select" },
   },
   status: "In Codex",
@@ -57,35 +59,15 @@ function createService(overrides: Partial<PostMergeCloseoutEvidence> = {}) {
 function createRepository(overrides: Partial<PostMergeCloseoutTaskRepository> = {}) {
   const repository: PostMergeCloseoutTaskRepository = {
     appendPostMergeCloseoutResult: vi.fn().mockResolvedValue(undefined),
-    createPostMergeCloseoutPlan: vi.fn(({ evidence: nextEvidence, mergedStatusName, task: nextTask }) => {
-      const duplicateMarkerCount = (nextTask.contentMarkdown.match(/post-merge-closeout:/g) ?? []).length;
-      const plan: PostMergeCloseoutPlan = {
-        blockPreview: `Post-Merge Closeout: ${nextEvidence.pullRequest.repository}#${nextEvidence.pullRequest.pullRequestNumber}`,
-        closeoutMarker: `post-merge-closeout:${nextEvidence.pullRequest.repository}#${nextEvidence.pullRequest.pullRequestNumber}:${nextEvidence.pullRequest.mergeSha}`,
-        duplicateMarkerCount,
-        markerAlreadyExists: duplicateMarkerCount > 0,
-        propertyWrites: [
-          {
-            name: "Status",
-            source: "Status after post-merge closeout",
-            status: "planned",
-            type: "select",
-            update: { select: { name: mergedStatusName } },
-            value: mergedStatusName,
-          },
-          {
-            name: "Merge SHA",
-            source: "Merge commit SHA",
-            status: "planned",
-            type: "rich_text",
-            update: { rich_text: [{ text: { content: nextEvidence.pullRequest.mergeSha }, type: "text" }] },
-            value: nextEvidence.pullRequest.mergeSha,
-          },
-        ],
-      };
-
-      return plan;
-    }),
+    createPostMergeCloseoutPlan: vi.fn(({ evidence: nextEvidence, mergedStatusName, task: nextTask }) =>
+      createPostMergeCloseoutPlan({
+        evidence: nextEvidence,
+        mergedStatusName,
+        statusPropertyName: "Status",
+        statusPropertyType: "select",
+        task: nextTask,
+      }),
+    ),
     fetchTask: vi.fn().mockResolvedValue(task),
     writePostMergeCloseoutProperties: vi.fn((_: string, plan: PostMergeCloseoutPlan) =>
       Promise.resolve(
@@ -166,6 +148,95 @@ describe("PostMergeCloseoutWorkflow", () => {
     });
     expect(repository.writePostMergeCloseoutProperties).toHaveBeenCalledOnce();
     expect(repository.appendPostMergeCloseoutResult).toHaveBeenCalledOnce();
+  });
+
+  it("allows commit when the selected task PR Link matches the closeout PR", async () => {
+    const repository = createRepository({
+      fetchTask: vi.fn().mockResolvedValue({
+        ...task,
+        properties: {
+          ...task.properties,
+          "PR Link": { type: "url", url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21" },
+        },
+      }),
+    });
+    const workflow = createWorkflow({ repository });
+
+    const result = await workflow.commit({
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        plan: {
+          taskPrLinkCheck: {
+            status: "match",
+          },
+        },
+      },
+    });
+    expect(repository.writePostMergeCloseoutProperties).toHaveBeenCalledOnce();
+  });
+
+  it("blocks commit when the selected task PR Link points to a different PR", async () => {
+    const repository = createRepository({
+      fetchTask: vi.fn().mockResolvedValue({
+        ...task,
+        properties: {
+          ...task.properties,
+          "PR Link": { type: "url", url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/20" },
+        },
+      }),
+    });
+    const workflow = createWorkflow({ repository });
+
+    const result = await workflow.commit({
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        message: expect.stringContaining("points to SherifHaidar/chief-of-staff-agent-office#20"),
+        statusCode: 409,
+      },
+      ok: false,
+    });
+    expect(repository.writePostMergeCloseoutProperties).not.toHaveBeenCalled();
+    expect(repository.appendPostMergeCloseoutResult).not.toHaveBeenCalled();
+  });
+
+  it("allows commit when the selected task PR Link is empty and writes the closeout PR link", async () => {
+    const repository = createRepository();
+    const workflow = createWorkflow({ repository });
+
+    const result = await workflow.commit({
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        plan: {
+          taskPrLinkCheck: {
+            status: "empty",
+          },
+        },
+        propertyWrites: expect.arrayContaining([
+          expect.objectContaining({
+            name: "PR Link",
+            status: "written",
+            value: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+          }),
+        ]),
+      },
+    });
   });
 
   it("skips duplicate closeout block append when the same marker already exists", async () => {

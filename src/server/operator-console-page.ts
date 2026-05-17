@@ -499,6 +499,8 @@ export function renderOperatorConsolePage(): string {
       briefPreview.innerHTML = [
         '<div class="brief-title">' + escapeHtml(closeout.committed ? "Committed closeout" : "Preview closeout") + '</div>',
         '<p><strong>PR:</strong> ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + '</p>',
+        '<p><strong>Selected task update:</strong> Selected task will be updated with closeout evidence for ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + '.</p>',
+        '<p><strong>Task PR Link check:</strong> ' + escapeHtml(plan.taskPrLinkCheck ? plan.taskPrLinkCheck.message : "No task PR Link check returned.") + '</p>',
         '<p><strong>Merged:</strong> ' + escapeHtml(pr.mergedAt) + ' by ' + escapeHtml(pr.mergedBy || "unknown") + '</p>',
         '<p><strong>Merge SHA:</strong> ' + escapeHtml(pr.mergeSha) + '</p>',
         '<p><strong>Idempotency marker:</strong> ' + escapeHtml(plan.closeoutMarker) + '</p>',

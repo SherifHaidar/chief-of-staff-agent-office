@@ -302,6 +302,7 @@ describe("renderPostMergeCloseoutBlocks", () => {
         idempotency: "marker not present; closeout block can be appended",
         notionTaskTarget: "Post-Merge Closeout v0 (22222222-2222-2222-2222-222222222222)",
         properties: ["Status: planned select update"],
+        taskPrLink: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
       },
       evidence: {
         collectedAt: "2026-05-17T12:00:00.000Z",
@@ -349,6 +350,14 @@ describe("renderPostMergeCloseoutBlocks", () => {
             value: "Merged",
           },
         ],
+        taskPrLinkCheck: {
+          message: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
+          propertyName: "PR Link",
+          pullRequestNumber: 21,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          status: "match",
+          value: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+        },
       },
       propertyWrites: [
         {
@@ -365,6 +374,7 @@ describe("renderPostMergeCloseoutBlocks", () => {
 
     expect(serialized).toContain("Post-Merge Closeout");
     expect(serialized).toContain("post-merge-closeout:SherifHaidar/chief-of-staff-agent-office#21:merge-sha");
+    expect(serialized).toContain("Selected Task PR Link Check");
     expect(serialized).toContain("does not merge, deploy, approve production, or dispatch Codex fixes automatically");
   });
 });
