@@ -45,6 +45,20 @@ const reviewPacket: ClaudeReviewPacket = {
   verdict: "Ready for Human Smoke Test",
 };
 
+const needsFixReviewPacket: ClaudeReviewPacket = {
+  acceptanceChecklist: [{ criterion: "A fix brief is generated.", notes: "The PR needs targeted fixes.", status: "fail" }],
+  codexFixBrief: {
+    instructions: ["Move fix instructions under codexFixBrief.instructions."],
+    summary: "Fix malformed Claude review packet output.",
+    verification: ["Run the Claude review agent tests."],
+  },
+  missingEvidence: [],
+  risks: ["Structured review output may be rejected if malformed."],
+  suggestedSmokeTests: ["Rerun Review Desk on PR #20."],
+  summary: "Needs Codex fixes before smoke testing.",
+  verdict: "Needs Codex Fixes",
+};
+
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json" },
@@ -75,6 +89,10 @@ describe("AnthropicClaudeReviewRunner", () => {
     expect(result).toEqual(reviewPacket);
     expect(requestBody.tool_choice).toEqual({ name: "emit_review_packet", type: "tool" });
     expect(requestBody.tools[0].name).toBe("emit_review_packet");
+    expect(requestBody.tools[0].input_schema.additionalProperties).toBe(false);
+    expect(requestBody.tools[0].input_schema.properties.instructions).toBeUndefined();
+    expect(requestBody.tools[0].input_schema.properties.codexFixBrief.type).toBe("object");
+    expect(requestBody.tools[0].input_schema.properties.codexFixBrief.properties.instructions.type).toBe("array");
     expect(requestBody.messages[0].content).not.toContain("Chief of Staff do-not-break flows");
   });
 
@@ -110,6 +128,7 @@ describe("AnthropicClaudeReviewRunner", () => {
     expect(requestBody.messages[0].content).toContain("do not append broad Daily Capture digests to Weekly To-do");
     expect(requestBody.messages[0].content).toContain("Standalone memory confirmation supports short yes replies");
     expect(requestBody.messages[0].content).toContain("Do not include codexFixBrief unless the final verdict is Needs Codex Fixes.");
+    expect(requestBody.messages[0].content).toContain("Do not emit top-level instructions");
   });
 
   it("rejects invalid structured Claude tool output", async () => {
@@ -134,6 +153,64 @@ describe("AnthropicClaudeReviewRunner", () => {
         model: "claude-sonnet-test",
       }).review(evidence),
     ).rejects.toThrow("Claude structured review validation failed");
+  });
+
+  it("rejects malformed fix brief output with top-level instructions", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          content: [
+            {
+              input: {
+                ...needsFixReviewPacket,
+                codexFixBrief: "Fix this by changing the prompt.",
+                instructions: ["This must not be accepted at the root."],
+              },
+              name: "emit_review_packet",
+              type: "tool_use",
+            },
+          ],
+        }),
+      ),
+    );
+
+    let thrown: unknown;
+    try {
+      await new AnthropicClaudeReviewRunner({
+        apiKey: "test-key",
+        model: "claude-sonnet-test",
+      }).review(evidence);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain("Claude structured review validation failed");
+    expect((thrown as Error).message).toContain("codexFixBrief: Invalid input: expected object, received string");
+    expect((thrown as Error).message).toContain('root: Unrecognized key: "instructions"');
+  });
+
+  it("parses a valid Needs Codex Fixes packet with an object Codex fix brief", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          content: [{ input: needsFixReviewPacket, name: "emit_review_packet", type: "tool_use" }],
+        }),
+      ),
+    );
+
+    const result = await new AnthropicClaudeReviewRunner({
+      apiKey: "test-key",
+      model: "claude-sonnet-test",
+    }).review(evidence);
+
+    expect(result).toEqual(needsFixReviewPacket);
+    expect(result.codexFixBrief).toMatchObject({
+      instructions: ["Move fix instructions under codexFixBrief.instructions."],
+      summary: "Fix malformed Claude review packet output.",
+    });
   });
 
   it("returns a specific configuration error when Anthropic rejects the configured model", async () => {

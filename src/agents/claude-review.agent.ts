@@ -34,14 +34,17 @@ const CHIEF_OF_STAFF_DO_NOT_BREAK_FLOWS = [
 ];
 const REVIEW_TOOL_INPUT_SCHEMA = {
   additionalProperties: false,
+  description:
+    "A ClaudeReviewPacket. Root keys are limited to verdict, summary, risks, missingEvidence, acceptanceChecklist, suggestedSmokeTests, and optional codexFixBrief. Do not emit top-level instructions.",
   properties: {
     acceptanceChecklist: {
+      description: "Evaluation of each acceptance criterion from the work order.",
       items: {
         additionalProperties: false,
         properties: {
-          criterion: { minLength: 1, type: "string" },
-          notes: { minLength: 1, type: "string" },
-          status: { enum: ["pass", "fail", "unclear"], type: "string" },
+          criterion: { description: "The acceptance criterion being evaluated.", minLength: 1, type: "string" },
+          notes: { description: "Evidence-based notes for this criterion.", minLength: 1, type: "string" },
+          status: { description: "Pass/fail/unclear status for this criterion.", enum: ["pass", "fail", "unclear"], type: "string" },
         },
         required: ["criterion", "status", "notes"],
         type: "object",
@@ -50,19 +53,33 @@ const REVIEW_TOOL_INPUT_SCHEMA = {
     },
     codexFixBrief: {
       additionalProperties: false,
+      description:
+        "Optional object only for verdict 'Needs Codex Fixes'. Never use a string. Never put instructions at the root; put them in codexFixBrief.instructions.",
       properties: {
-        instructions: { items: { minLength: 1, type: "string" }, type: "array" },
-        summary: { minLength: 1, type: "string" },
-        verification: { items: { minLength: 1, type: "string" }, type: "array" },
+        instructions: {
+          description: "Focused Codex fix instructions. This array must be nested inside codexFixBrief.",
+          items: { minLength: 1, type: "string" },
+          type: "array",
+        },
+        summary: { description: "Brief summary of the required Codex fixes.", minLength: 1, type: "string" },
+        verification: {
+          description: "Verification steps Codex should run after the fixes.",
+          items: { minLength: 1, type: "string" },
+          type: "array",
+        },
       },
       required: ["summary", "instructions", "verification"],
       type: "object",
     },
-    missingEvidence: { items: { minLength: 1, type: "string" }, type: "array" },
-    risks: { items: { minLength: 1, type: "string" }, type: "array" },
-    suggestedSmokeTests: { items: { minLength: 1, type: "string" }, type: "array" },
-    summary: { minLength: 1, type: "string" },
-    verdict: { enum: ["Needs Codex Fixes", "Ready for Human Smoke Test", "Blocked"], type: "string" },
+    missingEvidence: { description: "Missing evidence needed to trust the review.", items: { minLength: 1, type: "string" }, type: "array" },
+    risks: { description: "Material risks or caveats from the implementation evidence.", items: { minLength: 1, type: "string" }, type: "array" },
+    suggestedSmokeTests: { description: "Manual smoke tests Sherif should run before final approval.", items: { minLength: 1, type: "string" }, type: "array" },
+    summary: { description: "Concise evidence-based review summary.", minLength: 1, type: "string" },
+    verdict: {
+      description: "One of exactly three Review Desk verdicts.",
+      enum: ["Needs Codex Fixes", "Ready for Human Smoke Test", "Blocked"],
+      type: "string",
+    },
   },
   required: ["verdict", "summary", "risks", "missingEvidence", "acceptanceChecklist", "suggestedSmokeTests"],
   type: "object",
@@ -76,6 +93,8 @@ const REVIEW_SYSTEM_PROMPT = [
   "Allowed verdicts are exactly: Needs Codex Fixes, Ready for Human Smoke Test, Blocked.",
   "Ready for Human Smoke Test never means merge-ready, deploy-ready, or finally approved.",
   "Only include codexFixBrief when the verdict is Needs Codex Fixes and the fixes are actionable.",
+  "codexFixBrief must be an object with summary, instructions, and verification. Never emit codexFixBrief as a string.",
+  "Never emit top-level instructions. Fix instructions belong only in codexFixBrief.instructions.",
   "Do not ask Codex to merge, deploy, or bypass Sherif approval.",
 ].join("\n");
 
@@ -88,6 +107,8 @@ function buildReviewMessage(evidence: ReviewDeskEvidencePacket): string {
     "Review this evidence packet and call the required structured review tool.",
     "Each acceptanceChecklist item must include criterion, status (pass|fail|unclear), and notes.",
     "Do not include codexFixBrief unless the final verdict is Needs Codex Fixes.",
+    "If verdict is Needs Codex Fixes, codexFixBrief must be an object: { summary: string, instructions: string[], verification: string[] }.",
+    "Do not emit top-level instructions; instructions is only valid as codexFixBrief.instructions.",
   ];
 
   if (isChiefOfStaffProductReview(evidence)) {
