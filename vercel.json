@@ -50,6 +50,10 @@
       "destination": "/api/agent-office/codex-dispatch/record"
     },
     {
+      "source": "/agent-office/codex-dispatch/status",
+      "destination": "/api/agent-office/codex-dispatch/status"
+    },
+    {
       "source": "/agent-office/github/draft-pr",
       "destination": "/api/agent-office/github/draft-pr"
     },

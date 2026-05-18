@@ -37,7 +37,7 @@ import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
 import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
-import { CodexDispatchInputSchema } from "../domain/codex-dispatch.js";
+import { CodexDispatchInputSchema, CodexDispatchStatusInputSchema } from "../domain/codex-dispatch.js";
 import { PostMergeCloseoutInputSchema } from "../domain/post-merge-closeout.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { ReviewDeskInputSchema } from "../domain/review-desk.js";
@@ -51,7 +51,10 @@ import type {
   CodexHandoffWorkflowInput,
   CodexHandoffWorkflowResult,
 } from "../workflows/codex-handoff.workflow.js";
-import type { CodexDispatchWorkflowResult } from "../workflows/codex-dispatch.workflow.js";
+import type {
+  CodexDispatchStatusWorkflowResult,
+  CodexDispatchWorkflowResult,
+} from "../workflows/codex-dispatch.workflow.js";
 import type {
   ApprovedGitHubDraftPrInput,
   GitHubDraftPrPreviewInput,
@@ -137,6 +140,7 @@ export type PostMergeCloseoutWorkflowRunner = {
 export type CodexDispatchWorkflowRunner = {
   preview(input: z.infer<typeof CodexDispatchInputSchema>): Promise<CodexDispatchWorkflowResult>;
   record(input: { preview: ReturnType<typeof verifyCodexDispatchApproval>["preview"] }): Promise<CodexDispatchWorkflowResult>;
+  status(input: z.infer<typeof CodexDispatchStatusInputSchema>): Promise<CodexDispatchStatusWorkflowResult>;
 };
 
 export type AgentOfficeAppOptions = {
@@ -167,6 +171,7 @@ export type AgentOfficeAppOptions = {
 
 type AnyWorkflowResult =
   | CodexHandoffWorkflowResult
+  | CodexDispatchStatusWorkflowResult
   | CodexDispatchWorkflowResult
   | GitHubDraftPrWorkflowResult
   | ImplementationWorkflowResult
@@ -1156,6 +1161,59 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       ok: true,
       result: result.dispatch,
       run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-dispatch/status", async (request, reply) => {
+    const parsed = CodexDispatchStatusInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = options.codexDispatchWorkflow;
+    if (!workflow?.status) {
+      return reply.code(503).send({
+        error:
+          options.codexDispatchConfigurationMessage ??
+          "Codex Dispatch status is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.status(parsed.data);
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "codex-dispatch",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      run,
+      status: result.status,
       taskId: result.pageId,
     });
   });

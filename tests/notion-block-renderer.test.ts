@@ -382,11 +382,24 @@ describe("renderPostMergeCloseoutBlocks", () => {
 });
 
 describe("renderCodexDispatchBlocks", () => {
-  it("renders packet-only dispatch language without implying Codex started", () => {
+  it("renders posted @codex comment evidence without implying completion", () => {
     const result: CodexDispatchRecordResult = {
       blockAppended: true,
+      codexStatus: {
+        checkedAt: "2026-05-18T09:30:00.000Z",
+        dispatchCommentCreatedAt: "2026-05-18T09:31:00.000Z",
+        dispatchCommentId: 123,
+        label: "awaiting Codex response",
+        signals: [],
+        summary: "The @codex dispatch comment was posted. Awaiting Codex response evidence from GitHub.",
+      },
+      comment: {
+        body: "@codex implement this work order on this PR branch.",
+        fallbackPrompt: "Work on PR #22 in SherifHaidar/chief-of-staff-agent-office.",
+        title: "@codex dispatch comment",
+      },
       diagnostics: {
-        directDispatch: "Direct Codex execution is unavailable in Codex Dispatch v0.",
+        githubDispatch: "Preview ready. Confirmation will post the @codex comment.",
         githubVerification: "work-order PR verified",
         idempotency: "dispatch marker not present; packet block can be recorded",
         metadataValidation: "selected task, work-order file, repository, branch, and PR metadata match",
@@ -428,22 +441,29 @@ describe("renderCodexDispatchBlocks", () => {
         title: "Codex Dispatch v0",
       },
       packet: {
-        markdown: "# Codex Dispatch Packet",
-        nextAction: "Open Codex manually, then send to Review + Iteration Desk.",
+        markdown: "# Codex Dispatch Audit Packet",
+        nextAction: "Await Codex response, then send to Review + Iteration Desk.",
         safetyBoundaries: ["Do not merge.", "Do not deploy production."],
-        title: "Codex Dispatch Packet: SherifHaidar/chief-of-staff-agent-office#22",
+        title: "Codex Dispatch Audit Packet: SherifHaidar/chief-of-staff-agent-office#22",
       },
       plan: {
-        directDispatch: {
-          message: "Direct Codex execution is unavailable in Codex Dispatch v0.",
-          status: "unavailable_not_configured",
+        githubDispatch: {
+          message: "Preview ready. Confirmation will post the @codex comment.",
+          status: "comment_posted",
         },
         dispatchMarker: "codex-dispatch:SherifHaidar/chief-of-staff-agent-office#22:head-sha",
         duplicateMarkerCount: 0,
         markerAlreadyExists: false,
-        proposedNextAction: "Open Codex manually, then send to Review + Iteration Desk.",
-        proposedRecordStatus: "Codex Dispatch packet recorded",
-        writeTargets: ["Notion task page block for Codex Dispatch v0"],
+        proposedNextAction: "Await Codex response, then send to Review + Iteration Desk.",
+        proposedRecordStatus: "Codex @codex dispatch comment posted",
+        writeTargets: ["GitHub PR comment on SherifHaidar/chief-of-staff-agent-office#22"],
+      },
+      postedComment: {
+        author: "sherif-agent-office-orchestrator[bot]",
+        body: "@codex implement this work order on this PR branch.",
+        createdAt: "2026-05-18T09:31:00.000Z",
+        id: 123,
+        url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/22#issuecomment-123",
       },
       recorded: true,
     };
@@ -451,8 +471,9 @@ describe("renderCodexDispatchBlocks", () => {
     const serialized = JSON.stringify(renderCodexDispatchBlocks(result, new Date("2026-05-18T09:30:00.000Z")));
 
     expect(serialized).toContain("Codex Dispatch");
-    expect(serialized).toContain("Codex Dispatch packet recorded");
-    expect(serialized).toContain("does not start Codex");
-    expect(serialized).not.toContain("Codex started");
+    expect(serialized).toContain("Codex @codex dispatch comment posted");
+    expect(serialized).toContain("awaiting Codex response");
+    expect(serialized).toContain("Posted @codex Comment");
+    expect(serialized).not.toContain("Codex completed");
   });
 });

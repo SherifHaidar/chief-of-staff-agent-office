@@ -3,10 +3,12 @@ import { z } from "zod";
 import type { AiBuildTask } from "./ai-build-task.js";
 import { normalizeNotionPageId } from "../utils/ids.js";
 
-export const CODEX_DISPATCH_RECORDED_STATUS = "Codex Dispatch packet recorded";
+export const CODEX_DISPATCH_RECORDED_STATUS = "Codex @codex dispatch comment posted";
 export const CODEX_DISPATCH_NEXT_GATE = "Review + Iteration Desk";
+export const CODEX_DISPATCH_AWAITING_STATUS = "awaiting Codex response";
+export const CODEX_DISPATCH_BOT_LOGIN_FRAGMENT = "codex";
 export const DIRECT_CODEX_DISPATCH_UNAVAILABLE =
-  "Direct Codex execution is unavailable in Codex Dispatch v0. Use the recorded packet manually in Codex.";
+  "Direct OpenAI API/CLI dispatch remains out of scope; GitHub @codex PR comments are the v0 dispatch path.";
 
 export const CodexDispatchInputSchema = z
   .object({
@@ -17,6 +19,13 @@ export const CodexDispatchInputSchema = z
   .strict();
 
 export type CodexDispatchInput = z.infer<typeof CodexDispatchInputSchema>;
+
+export const CodexDispatchStatusInputSchema = CodexDispatchInputSchema.extend({
+  dispatchCommentCreatedAt: z.string().datetime(),
+  dispatchCommentId: z.number().int().positive().optional(),
+}).strict();
+
+export type CodexDispatchStatusInput = z.infer<typeof CodexDispatchStatusInputSchema>;
 
 export const CodexDispatchPullRequestEvidenceSchema = z
   .object({
@@ -89,12 +98,64 @@ export const CodexDispatchPacketSchema = z
 
 export type CodexDispatchPacket = z.infer<typeof CodexDispatchPacketSchema>;
 
+export const CodexDispatchCommentSchema = z
+  .object({
+    body: z.string().min(1),
+    fallbackPrompt: z.string().min(1),
+    title: z.string().min(1),
+  })
+  .strict();
+
+export type CodexDispatchComment = z.infer<typeof CodexDispatchCommentSchema>;
+
+export const CodexDispatchPostedCommentSchema = z
+  .object({
+    author: z.string().min(1),
+    body: z.string().min(1),
+    createdAt: z.string().datetime(),
+    id: z.number().int().positive(),
+    url: z.string().url(),
+  })
+  .strict();
+
+export type CodexDispatchPostedComment = z.infer<typeof CodexDispatchPostedCommentSchema>;
+
+export const CodexDispatchSignalSchema = z
+  .object({
+    actor: z.string().min(1).optional(),
+    createdAt: z.string().datetime(),
+    summary: z.string().min(1),
+    type: z.enum(["codex_comment", "codex_review", "codex_task", "commit"]),
+    url: z.string().url().optional(),
+  })
+  .strict();
+
+export type CodexDispatchSignal = z.infer<typeof CodexDispatchSignalSchema>;
+
+export const CodexDispatchStatusReportSchema = z
+  .object({
+    checkedAt: z.string().datetime(),
+    dispatchCommentCreatedAt: z.string().datetime(),
+    dispatchCommentId: z.number().int().positive().optional(),
+    label: z.enum([
+      "awaiting Codex response",
+      "Codex responded/reviewed",
+      "Codex created a task",
+      "Codex pushed/applied commits",
+    ]),
+    signals: z.array(CodexDispatchSignalSchema),
+    summary: z.string().min(1),
+  })
+  .strict();
+
+export type CodexDispatchStatusReport = z.infer<typeof CodexDispatchStatusReportSchema>;
+
 export const CodexDispatchPlanSchema = z
   .object({
-    directDispatch: z
+    githubDispatch: z
       .object({
         message: z.string().min(1),
-        status: z.literal("unavailable_not_configured"),
+        status: z.enum(["ready_to_post", "comment_posted"]),
       })
       .strict(),
     dispatchMarker: z.string().min(1),
@@ -110,7 +171,7 @@ export type CodexDispatchPlan = z.infer<typeof CodexDispatchPlanSchema>;
 
 export const CodexDispatchDiagnosticsSchema = z
   .object({
-    directDispatch: z.string().min(1),
+    githubDispatch: z.string().min(1),
     githubVerification: z.string().min(1),
     idempotency: z.string().min(1),
     metadataValidation: z.string().min(1),
@@ -126,6 +187,7 @@ export const CodexDispatchResultBaseSchema = z
     evidence: CodexDispatchEvidenceSchema,
     generatedAt: z.string().datetime(),
     input: CodexDispatchInputSchema,
+    comment: CodexDispatchCommentSchema,
     notionTask: z
       .object({
         currentStatus: z.string().optional(),
@@ -145,6 +207,8 @@ export const CodexDispatchPreviewSchema = CodexDispatchResultBaseSchema.extend({
 
 export const CodexDispatchRecordResultSchema = CodexDispatchResultBaseSchema.extend({
   blockAppended: z.boolean(),
+  codexStatus: CodexDispatchStatusReportSchema,
+  postedComment: CodexDispatchPostedCommentSchema,
   recorded: z.literal(true),
 }).strict();
 
@@ -265,6 +329,48 @@ export function createCodexDispatchMarker(evidence: CodexDispatchEvidence): stri
   return `codex-dispatch:${evidence.pullRequest.repository}#${evidence.pullRequest.pullRequestNumber}:${evidence.pullRequest.headSha}`;
 }
 
+export function createCodexDispatchComment(input: { evidence: CodexDispatchEvidence }): CodexDispatchComment {
+  const { pullRequest, workOrder } = input.evidence;
+  const fallbackPrompt = [
+    `Work on PR #${pullRequest.pullRequestNumber} in ${pullRequest.repository}.`,
+    "",
+    "Branch:",
+    pullRequest.headBranch,
+    "",
+    "Start by reading:",
+    workOrder.path,
+    "",
+    "Implement the work order on this branch only.",
+    "",
+    "Do not merge.",
+    "Do not deploy.",
+    "Do not switch repo or branch.",
+    "When done, report changed files, tests, CI/Vercel status, and blockers.",
+  ].join("\n");
+  const body = [
+    "@codex implement this work order on this PR branch.",
+    "",
+    `Repo: ${pullRequest.repository}`,
+    `Branch: ${pullRequest.headBranch}`,
+    `PR: #${pullRequest.pullRequestNumber}`,
+    "",
+    "Read:",
+    workOrder.path,
+    "",
+    "Work only on this branch.",
+    "Do not merge.",
+    "Do not deploy.",
+    "Do not switch repo or branch.",
+    "After implementation, report changed files, tests, CI/Vercel status, and blockers.",
+  ].join("\n");
+
+  return CodexDispatchCommentSchema.parse({
+    body,
+    fallbackPrompt,
+    title: `@codex dispatch comment: ${pullRequest.repository}#${pullRequest.pullRequestNumber}`,
+  });
+}
+
 export function createCodexDispatchPacket(input: {
   evidence: CodexDispatchEvidence;
   request: CodexDispatchInput;
@@ -281,11 +387,11 @@ export function createCodexDispatchPacket(input: {
     "Do not switch repositories or branches unless Sherif explicitly redirects.",
     "After implementation and tests, send the PR to Review + Iteration Desk before human approval.",
   ];
-  const nextAction = `Open Codex with this packet for ${pullRequest.repository}#${pullRequest.pullRequestNumber} on ${pullRequest.headBranch}. After implementation and tests, send the PR to ${CODEX_DISPATCH_NEXT_GATE}.`;
+  const nextAction = `Post the previewed @codex comment to ${pullRequest.repository}#${pullRequest.pullRequestNumber}, then await Codex response evidence. After implementation and tests, send the PR to ${CODEX_DISPATCH_NEXT_GATE}.`;
   const markdown = [
     "# Codex Dispatch Packet",
     "",
-    "Packet prepared by Agent Office. This is an instruction packet only; Codex has not been started.",
+    "Audit packet prepared by Agent Office. The primary v0 dispatch path is the short GitHub @codex PR comment.",
     "",
     "## Target",
     `- Repository: ${pullRequest.repository}`,
@@ -330,7 +436,7 @@ export function createCodexDispatchPacket(input: {
     markdown,
     nextAction,
     safetyBoundaries,
-    title: `Codex Dispatch Packet: ${pullRequest.repository}#${pullRequest.pullRequestNumber}`,
+    title: `Codex Dispatch Audit Packet: ${pullRequest.repository}#${pullRequest.pullRequestNumber}`,
   });
 }
 
@@ -405,16 +511,19 @@ export function createCodexDispatchPlan(input: {
   return {
     packet,
     plan: CodexDispatchPlanSchema.parse({
-      directDispatch: {
-        message: DIRECT_CODEX_DISPATCH_UNAVAILABLE,
-        status: "unavailable_not_configured",
+      githubDispatch: {
+        message: `Preview ready. Confirmation will post the @codex comment to ${input.evidence.pullRequest.repository}#${input.evidence.pullRequest.pullRequestNumber} and record the comment URL in Notion.`,
+        status: "ready_to_post",
       },
       dispatchMarker: marker,
       duplicateMarkerCount,
       markerAlreadyExists: duplicateMarkerCount > 0,
       proposedNextAction: packet.nextAction,
       proposedRecordStatus: CODEX_DISPATCH_RECORDED_STATUS,
-      writeTargets: [`Notion task page block for ${input.task.title}`],
+      writeTargets: [
+        `GitHub PR comment on ${input.evidence.pullRequest.repository}#${input.evidence.pullRequest.pullRequestNumber}`,
+        `Notion task page block for ${input.task.title}`,
+      ],
     }),
   };
 }
@@ -425,14 +534,14 @@ export function createCodexDispatchDiagnostics(input: {
   task: AiBuildTask;
 }): CodexDispatchDiagnostics {
   return {
-    directDispatch: input.plan.directDispatch.message,
+    githubDispatch: input.plan.githubDispatch.message,
     githubVerification: `work-order PR verified at ${input.evidence.pullRequest.url} on branch ${input.evidence.pullRequest.headBranch}`,
     idempotency:
       input.plan.duplicateMarkerCount > 1
         ? `dispatch marker found ${input.plan.duplicateMarkerCount} times`
         : input.plan.markerAlreadyExists
-          ? "dispatch marker already exists; record will skip duplicate block append"
-          : "dispatch marker not present; packet block can be recorded",
+          ? "dispatch marker already exists; record will not post a duplicate @codex comment"
+          : "dispatch marker not present; @codex comment can be posted",
     metadataValidation: "selected task, work-order file, repository, branch, and PR metadata match",
     notionTaskTarget: `${input.task.title} (${normalizeNotionPageId(input.task.pageId)})`,
   };
@@ -447,6 +556,7 @@ export function createCodexDispatchPreview(input: {
   task: AiBuildTask;
 }): CodexDispatchPreview {
   return CodexDispatchPreviewSchema.parse({
+    comment: createCodexDispatchComment({ evidence: input.evidence }),
     diagnostics: createCodexDispatchDiagnostics({ evidence: input.evidence, plan: input.plan, task: input.task }),
     evidence: input.evidence,
     generatedAt: input.generatedAt.toISOString(),
@@ -465,23 +575,45 @@ export function createCodexDispatchPreview(input: {
 
 export function createCodexDispatchRecordResult(input: {
   blockAppended: boolean;
+  codexStatus: CodexDispatchStatusReport;
   duplicateMarkerCount: number;
   generatedAt: Date;
   markerAlreadyExists: boolean;
+  postedComment: CodexDispatchPostedComment;
   preview: CodexDispatchPreview;
 }): CodexDispatchRecordResult {
   const plan = {
     ...input.preview.plan,
     duplicateMarkerCount: input.duplicateMarkerCount,
+    githubDispatch: {
+      message: `@codex comment posted to ${input.postedComment.url}. Awaiting Codex response evidence.`,
+      status: "comment_posted" as const,
+    },
     markerAlreadyExists: input.markerAlreadyExists,
   };
 
   return CodexDispatchRecordResultSchema.parse({
     ...input.preview,
     blockAppended: input.blockAppended,
+    codexStatus: input.codexStatus,
     generatedAt: input.generatedAt.toISOString(),
     plan,
+    postedComment: input.postedComment,
     recorded: true,
+  });
+}
+
+export function createInitialCodexDispatchStatus(input: {
+  checkedAt: Date;
+  postedComment: CodexDispatchPostedComment;
+}): CodexDispatchStatusReport {
+  return CodexDispatchStatusReportSchema.parse({
+    checkedAt: input.checkedAt.toISOString(),
+    dispatchCommentCreatedAt: input.postedComment.createdAt,
+    dispatchCommentId: input.postedComment.id,
+    label: CODEX_DISPATCH_AWAITING_STATUS,
+    signals: [],
+    summary: "The @codex dispatch comment was posted. Awaiting Codex response evidence from GitHub.",
   });
 }
 

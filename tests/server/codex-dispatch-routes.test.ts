@@ -10,8 +10,15 @@ const authHeaders = { "x-agent-office-api-key": apiKey };
 const pageId = "364b258f-9a3e-8199-9d57-f6b8d01a099a";
 
 const preview: CodexDispatchPreview = {
+  comment: {
+    body:
+      "@codex implement this work order on this PR branch.\n\nRead:\n.agent-office/work-orders/364b258f-9a3e-8199-9d57-f6b8d01a099a.md",
+    fallbackPrompt:
+      "Work on PR #22 in SherifHaidar/chief-of-staff-agent-office.\n\nStart by reading:\n.agent-office/work-orders/364b258f-9a3e-8199-9d57-f6b8d01a099a.md",
+    title: "@codex dispatch comment: SherifHaidar/chief-of-staff-agent-office#22",
+  },
   diagnostics: {
-    directDispatch: "Direct Codex execution is unavailable in Codex Dispatch v0. Use the recorded packet manually in Codex.",
+    githubDispatch: "Preview ready. Confirmation will post the @codex comment.",
     githubVerification: "work-order PR verified",
     idempotency: "dispatch marker not present; packet block can be recorded",
     metadataValidation: "selected task, work-order file, repository, branch, and PR metadata match",
@@ -67,22 +74,25 @@ const preview: CodexDispatchPreview = {
   packet: {
     markdown: "# Codex Dispatch Packet\n\nPacket prepared by Agent Office.",
     nextAction:
-      "Open Codex with this packet for SherifHaidar/chief-of-staff-agent-office#22 on agent-office/impl-add-codex-dispatch-v0-packet-workflow-364b258f. After implementation and tests, send the PR to Review + Iteration Desk.",
+      "Post the previewed @codex comment to SherifHaidar/chief-of-staff-agent-office#22, then await Codex response evidence. After implementation and tests, send the PR to Review + Iteration Desk.",
     safetyBoundaries: ["Do not merge.", "Do not deploy production."],
-    title: "Codex Dispatch Packet: SherifHaidar/chief-of-staff-agent-office#22",
+    title: "Codex Dispatch Audit Packet: SherifHaidar/chief-of-staff-agent-office#22",
   },
   plan: {
-    directDispatch: {
-      message: "Direct Codex execution is unavailable in Codex Dispatch v0. Use the recorded packet manually in Codex.",
-      status: "unavailable_not_configured",
+    githubDispatch: {
+      message: "Preview ready. Confirmation will post the @codex comment.",
+      status: "ready_to_post",
     },
     dispatchMarker: "codex-dispatch:SherifHaidar/chief-of-staff-agent-office#22:head-sha",
     duplicateMarkerCount: 0,
     markerAlreadyExists: false,
     proposedNextAction:
-      "Open Codex with this packet for SherifHaidar/chief-of-staff-agent-office#22 on agent-office/impl-add-codex-dispatch-v0-packet-workflow-364b258f. After implementation and tests, send the PR to Review + Iteration Desk.",
-    proposedRecordStatus: "Codex Dispatch packet recorded",
-    writeTargets: ["Notion task page block for Add Codex Dispatch v0"],
+      "Post the previewed @codex comment to SherifHaidar/chief-of-staff-agent-office#22, then await Codex response evidence. After implementation and tests, send the PR to Review + Iteration Desk.",
+    proposedRecordStatus: "Codex @codex dispatch comment posted",
+    writeTargets: [
+      "GitHub PR comment on SherifHaidar/chief-of-staff-agent-office#22",
+      "Notion task page block for Add Codex Dispatch v0",
+    ],
   },
   recorded: false,
 };
@@ -90,6 +100,21 @@ const preview: CodexDispatchPreview = {
 const recordResult: CodexDispatchRecordResult = {
   ...preview,
   blockAppended: true,
+  codexStatus: {
+    checkedAt: "2026-05-18T09:30:00.000Z",
+    dispatchCommentCreatedAt: "2026-05-18T09:31:00.000Z",
+    dispatchCommentId: 123,
+    label: "awaiting Codex response",
+    signals: [],
+    summary: "The @codex dispatch comment was posted. Awaiting Codex response evidence from GitHub.",
+  },
+  postedComment: {
+    author: "sherif-agent-office-orchestrator[bot]",
+    body: preview.comment.body,
+    createdAt: "2026-05-18T09:31:00.000Z",
+    id: 123,
+    url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/22#issuecomment-123",
+  },
   recorded: true as const,
 };
 
@@ -130,6 +155,7 @@ describe("Codex Dispatch API", () => {
         wroteToNotion: false,
       }),
       record: vi.fn<CodexDispatchWorkflowRunner["record"]>(),
+      status: vi.fn<CodexDispatchWorkflowRunner["status"]>(),
     };
     const app = createTestApp({ codexDispatchWorkflow, runLog });
 
@@ -168,6 +194,7 @@ describe("Codex Dispatch API", () => {
     const codexDispatchWorkflow = {
       preview: vi.fn<CodexDispatchWorkflowRunner["preview"]>(),
       record: vi.fn<CodexDispatchWorkflowRunner["record"]>(),
+      status: vi.fn<CodexDispatchWorkflowRunner["status"]>(),
     };
     const app = createTestApp({ codexDispatchWorkflow });
 
@@ -208,6 +235,7 @@ describe("Codex Dispatch API", () => {
         title: preview.packet.title,
         wroteToNotion: true,
       }),
+      status: vi.fn<CodexDispatchWorkflowRunner["status"]>(),
     };
     const app = createTestApp({ codexDispatchWorkflow });
     const previewResponse = await app.inject({
@@ -272,6 +300,73 @@ describe("Codex Dispatch API", () => {
       ok: false,
       status: "blocked",
       taskId: pageId,
+    });
+
+    await app.close();
+  });
+
+  it("refreshes Codex Dispatch status without Notion writeback", async () => {
+    const codexDispatchWorkflow = {
+      preview: vi.fn<CodexDispatchWorkflowRunner["preview"]>(),
+      record: vi.fn<CodexDispatchWorkflowRunner["record"]>(),
+      status: vi.fn<CodexDispatchWorkflowRunner["status"]>().mockResolvedValue({
+        dryRun: true,
+        ok: true,
+        pageId,
+        status: {
+          checkedAt: "2026-05-18T09:40:00.000Z",
+          dispatchCommentCreatedAt: "2026-05-18T09:31:00.000Z",
+          dispatchCommentId: 123,
+          label: "Codex created a task",
+          signals: [
+            {
+              actor: "chatgpt-codex-connector[bot]",
+              createdAt: "2026-05-18T09:35:00.000Z",
+              summary: "View task",
+              type: "codex_task",
+              url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/22#discussion_r1",
+            },
+          ],
+          summary: "1 GitHub signal found after the @codex dispatch comment.",
+        },
+        statusUpdated: false,
+        title: "Codex Dispatch status: SherifHaidar/chief-of-staff-agent-office#22",
+        wroteToNotion: false,
+      }),
+    };
+    const app = createTestApp({ codexDispatchWorkflow });
+
+    const response = await app.inject({
+      headers: authHeaders,
+      method: "POST",
+      payload: {
+        dispatchCommentCreatedAt: "2026-05-18T09:31:00.000Z",
+        dispatchCommentId: 123,
+        pullRequestNumber: 22,
+        repository: "SherifHaidar/chief-of-staff-agent-office",
+        taskId: pageId,
+      },
+      url: "/agent-office/codex-dispatch/status",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(codexDispatchWorkflow.status).toHaveBeenCalledWith({
+      dispatchCommentCreatedAt: "2026-05-18T09:31:00.000Z",
+      dispatchCommentId: 123,
+      pullRequestNumber: 22,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+    expect(response.json()).toMatchObject({
+      ok: true,
+      status: {
+        label: "Codex created a task",
+      },
+      run: {
+        dryRun: true,
+        notionWriteback: false,
+        workflow: "codex-dispatch",
+      },
     });
 
     await app.close();

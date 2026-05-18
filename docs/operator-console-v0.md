@@ -17,7 +17,7 @@ The console supports these desk modes:
 - Architecture Desk: list `Ready for Architecture` tasks, preview an Architect Brief, optionally revise the preview through feedback rounds, approve exact writeback, then move Status to `Ready for Codex`.
 - Codex Handoff Desk: list `Ready for Codex` tasks, preview a Codex Handoff Brief, approve exact writeback, then move Status to `In Codex`.
 - Implementation Ready: list `In Codex` tasks that already contain an approved `Codex Handoff Brief:` marker, then preview and approve an implementation work-order PR.
-- Codex Dispatch: list implementation-ready tasks, preview a deterministic packet for an existing work-order PR/task, then record that packet to the Notion task after explicit confirmation. It does not start Codex.
+- Codex Dispatch: list implementation-ready tasks, preview a short `@codex` PR comment for an existing work-order PR/task, post it after explicit confirmation, record the comment URL/status to Notion, and refresh GitHub evidence for Codex responses or applied commits.
 
 Preview cards show whether the shared Product Context Pack was included. This tells the operator whether the agent used Notion product context and bounded GitHub repo context before generating the brief or handoff.
 
@@ -69,15 +69,16 @@ Approving the Codex Handoff Brief does not start coding. Approving the work-orde
 ```text
 List implementation-ready tasks
   -> enter the work-order repo and PR number
-  -> preview deterministic Codex Dispatch packet
+  -> preview deterministic @codex PR comment
   -> validate selected task, repo, branch, PR, and work-order file metadata
-  -> review the packet and safety boundaries
-  -> record signed preview token
-  -> append packet block to the Notion task
-  -> manually open Codex with the packet
+  -> review the exact comment and safety boundaries
+  -> approve signed preview token
+  -> post the @codex comment to the PR
+  -> append comment URL and awaiting status to the Notion task
+  -> refresh GitHub status until Codex response/review/task/commit evidence appears
 ```
 
-Preview mode is side-effect-free: no Notion writes, GitHub comments, commits, or direct Codex execution. Record mode writes the packet block only after explicit confirmation. Direct Codex execution is unavailable in v0.
+Preview mode is side-effect-free: no Notion writes, GitHub comments, commits, or direct Codex execution. Record mode posts exactly the previewed GitHub `@codex` PR comment and records the comment URL/status only after explicit confirmation. The desk does not claim Codex completed work until GitHub evidence appears.
 
 ## Approval Token Contract
 
@@ -109,7 +110,7 @@ Before approved writeback, the API checks the task page for the relevant marker:
 
 - `Architect Brief:` for Architecture Desk
 - `Codex Handoff Brief:` for Implementation Desk
-- `codex-dispatch:<repo>#<pr>:<head-sha>` for Codex Dispatch packet records
+- `codex-dispatch:<repo>#<pr>:<head-sha>` for Codex Dispatch comment records
 
 For GitHub Draft PR Prep, the GitHub service checks for duplicate branch/PR before creating the branch. For Controlled Implementation, the GitHub service creates or updates a scoped implementation branch and draft PR with only the approved work-order file, but never pushes to main, merges, deploys, changes protected repository paths, or edits product application files.
 

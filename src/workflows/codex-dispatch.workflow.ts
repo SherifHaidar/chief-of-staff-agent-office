@@ -5,12 +5,15 @@ import type {
   CodexDispatchPreview,
   CodexDispatchRecordResult,
   CodexDispatchResult,
+  CodexDispatchStatusInput,
+  CodexDispatchStatusReport,
 } from "../domain/codex-dispatch.js";
 import {
   countCodexDispatchMarker,
   createCodexDispatchPlan,
   createCodexDispatchPreview,
   createCodexDispatchRecordResult,
+  createInitialCodexDispatchStatus,
 } from "../domain/codex-dispatch.js";
 import type { CodexDispatchService } from "../github/codex-dispatch.service.js";
 import { serializeError } from "../utils/errors.js";
@@ -44,6 +47,18 @@ export type CodexDispatchWorkflowFailure = {
 };
 
 export type CodexDispatchWorkflowResult = CodexDispatchWorkflowFailure | CodexDispatchWorkflowSuccess;
+
+export type CodexDispatchStatusWorkflowSuccess = {
+  dryRun: true;
+  ok: true;
+  pageId: string;
+  status: CodexDispatchStatusReport;
+  statusUpdated: false;
+  title: string;
+  wroteToNotion: false;
+};
+
+export type CodexDispatchStatusWorkflowResult = CodexDispatchWorkflowFailure | CodexDispatchStatusWorkflowSuccess;
 
 export type CodexDispatchWorkflowDependencies = {
   dispatchService: CodexDispatchService;
@@ -85,6 +100,18 @@ function assertPreviewMatchesCurrentPullRequest(input: {
   if (currentPullRequest.headBranch !== previewPullRequest.headBranch) {
     issues.push(
       `Pull request head branch changed from ${previewPullRequest.headBranch} to ${currentPullRequest.headBranch}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (input.currentEvidence.workOrder.path !== input.preview.evidence.workOrder.path) {
+    issues.push(
+      `Work order path changed from ${input.preview.evidence.workOrder.path} to ${input.currentEvidence.workOrder.path}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (input.currentEvidence.workOrder.taskId !== input.preview.evidence.workOrder.taskId) {
+    issues.push(
+      `Work order task ID changed from ${input.preview.evidence.workOrder.taskId ?? "missing"} to ${input.currentEvidence.workOrder.taskId ?? "missing"}. Refresh the Codex Dispatch preview before recording.`,
     );
   }
 
@@ -168,33 +195,42 @@ export class CodexDispatchWorkflow {
       const task = await this.taskRepository.fetchTask(pageId);
       const duplicateMarkerCount = countCodexDispatchMarker(task.contentMarkdown, input.preview.plan.dispatchMarker);
 
-      if (duplicateMarkerCount > 1) {
+      if (duplicateMarkerCount > 0) {
         throw Object.assign(
           new Error(
-            `Codex Dispatch marker ${input.preview.plan.dispatchMarker} appears ${duplicateMarkerCount} times. Resolve duplicate dispatch records before recording.`,
+            `Codex Dispatch marker ${input.preview.plan.dispatchMarker} already appears on the task page. Refresh status instead of posting a duplicate @codex comment.`,
           ),
           { statusCode: 409 },
         );
       }
 
-      this.logger.info("Recording Codex Dispatch packet to Notion", {
+      this.logger.info("Posting Codex Dispatch @codex comment and recording it to Notion", {
         pageId,
         pullRequestNumber: input.preview.input.pullRequestNumber,
         repository: input.preview.input.repository,
       });
 
-      const markerAlreadyExists = duplicateMarkerCount > 0;
+      const postedComment = await this.dispatchService.postDispatchComment({
+        body: input.preview.comment.body,
+        pullRequestNumber: input.preview.input.pullRequestNumber,
+        repository: input.preview.input.repository,
+      });
+      const markerAlreadyExists = false;
+      const codexStatus = createInitialCodexDispatchStatus({
+        checkedAt: generatedAt,
+        postedComment,
+      });
       const recordResult = createCodexDispatchRecordResult({
-        blockAppended: !markerAlreadyExists,
+        blockAppended: true,
+        codexStatus,
         duplicateMarkerCount,
         generatedAt,
         markerAlreadyExists,
+        postedComment,
         preview: input.preview,
       });
 
-      if (!markerAlreadyExists) {
-        await this.taskRepository.appendCodexDispatchResult(pageId, recordResult, generatedAt);
-      }
+      await this.taskRepository.appendCodexDispatchResult(pageId, recordResult, generatedAt);
 
       return {
         dispatch: recordResult,
@@ -203,11 +239,48 @@ export class CodexDispatchWorkflow {
         pageId,
         statusUpdated: false,
         title: recordResult.packet.title,
-        wroteToNotion: !markerAlreadyExists,
+        wroteToNotion: true,
       };
     } catch (error) {
       const serialized = serializeError(error);
       this.logger.error("Codex Dispatch record failed", { error: serialized.message, pageId });
+
+      return {
+        error: serialized,
+        ok: false,
+        pageId,
+      };
+    }
+  }
+
+  async status(input: CodexDispatchStatusInput): Promise<CodexDispatchStatusWorkflowResult> {
+    let pageId: string | undefined;
+
+    try {
+      pageId = normalizeNotionPageId(input.taskId);
+      const normalizedInput = { ...input, taskId: pageId };
+      const checkedAt = this.now();
+
+      this.logger.info("Checking Codex Dispatch GitHub status", {
+        pageId,
+        pullRequestNumber: input.pullRequestNumber,
+        repository: input.repository,
+      });
+
+      const status = await this.dispatchService.collectStatus(normalizedInput, checkedAt);
+
+      return {
+        dryRun: true,
+        ok: true,
+        pageId,
+        status,
+        statusUpdated: false,
+        title: `Codex Dispatch status: ${input.repository}#${input.pullRequestNumber}`,
+        wroteToNotion: false,
+      };
+    } catch (error) {
+      const serialized = serializeError(error);
+      this.logger.error("Codex Dispatch status check failed", { error: serialized.message, pageId });
 
       return {
         error: serialized,

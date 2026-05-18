@@ -126,7 +126,8 @@ export function renderOperatorConsolePage(): string {
             <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
             <button id="implementationPreviewButton" hidden disabled>Preview work order</button>
             <button class="primary" id="implementationApproveButton" hidden disabled>Create work-order PR</button>
-            <button class="primary" id="codexDispatchRecordButton" hidden disabled>Record packet</button>
+            <button class="primary" id="codexDispatchRecordButton" hidden disabled>Post @codex comment</button>
+            <button id="codexDispatchStatusButton" hidden disabled>Refresh Codex status</button>
             <button class="primary" id="closeoutCommitButton" hidden disabled>Commit closeout</button>
           </div>
         </div>
@@ -185,7 +186,7 @@ export function renderOperatorConsolePage(): string {
         workflowName: "Implementation Ready"
       },
       codexDispatch: {
-        previewButtonLabel: "Preview packet",
+        previewButtonLabel: "Preview @codex comment",
         previewTitle: "Codex Dispatch",
         readyLabel: "Implementation task",
         taskEndpoint: "/agent-office/tasks/implementation-ready",
@@ -240,6 +241,7 @@ export function renderOperatorConsolePage(): string {
     const clearButton = document.getElementById("clearButton");
     const closeoutCommitButton = document.getElementById("closeoutCommitButton");
     const codexDispatchRecordButton = document.getElementById("codexDispatchRecordButton");
+    const codexDispatchStatusButton = document.getElementById("codexDispatchStatusButton");
     const deskMode = document.getElementById("deskMode");
     const expiresAt = document.getElementById("expiresAt");
     const githubApproveButton = document.getElementById("githubApproveButton");
@@ -304,6 +306,7 @@ export function renderOperatorConsolePage(): string {
       implementationPreviewButton.hidden = !isImplementationReadyMode();
       implementationApproveButton.hidden = !isImplementationReadyMode();
       codexDispatchRecordButton.hidden = !isCodexDispatchMode();
+      codexDispatchStatusButton.hidden = !isCodexDispatchMode();
       closeoutCommitButton.hidden = !isPostMergeCloseoutMode();
       reviewDeskInputs.hidden = !(isCodexDispatchMode() || isReviewDeskMode() || isPostMergeCloseoutMode());
       reviewRepo.previousElementSibling.textContent = isPostMergeCloseoutMode() ? "Closeout repo" : isCodexDispatchMode() ? "Dispatch repo" : "Review repo";
@@ -366,6 +369,7 @@ export function renderOperatorConsolePage(): string {
       implementationPreviewButton.disabled = true;
       implementationApproveButton.disabled = true;
       codexDispatchRecordButton.disabled = true;
+      codexDispatchStatusButton.disabled = true;
       closeoutCommitButton.disabled = true;
       revisionFeedback.value = "";
       revisionPanel.hidden = true;
@@ -418,6 +422,7 @@ export function renderOperatorConsolePage(): string {
       implementationPreviewButton.disabled = !isImplementationReadyMode();
       implementationApproveButton.disabled = true;
       codexDispatchRecordButton.disabled = true;
+      codexDispatchStatusButton.disabled = true;
       closeoutCommitButton.disabled = true;
       approvalPanel.hidden = true;
       revisionFeedback.value = "";
@@ -513,19 +518,23 @@ export function renderOperatorConsolePage(): string {
     function renderCodexDispatchResult(dispatch) {
       const pr = dispatch.evidence.pullRequest;
       const plan = dispatch.plan;
+      const status = dispatch.codexStatus;
       briefPreview.innerHTML = [
-        '<div class="brief-title">' + escapeHtml(dispatch.recorded ? "Codex Dispatch packet recorded" : "Codex Dispatch packet prepared") + '</div>',
+        '<div class="brief-title">' + escapeHtml(dispatch.recorded ? "@codex comment posted" : "@codex comment preview") + '</div>',
         '<p><strong>PR:</strong> ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + '</p>',
         '<p><strong>Branch:</strong> ' + escapeHtml(pr.headBranch) + '</p>',
         '<p><strong>Work order:</strong> ' + escapeHtml(dispatch.evidence.workOrder.path) + '</p>',
-        '<p><strong>Selected task update:</strong> Selected task will be updated with the recorded dispatch packet for ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + ' only after Record packet is confirmed.</p>',
-        '<p><strong>Notion write:</strong> ' + escapeHtml(dispatch.recorded ? (dispatch.blockAppended ? "Dispatch packet block recorded." : "Dispatch packet was already recorded; duplicate block skipped.") : "Preview only. No Notion or GitHub writes performed.") + '</p>',
-        '<p><strong>Direct Codex execution:</strong> ' + escapeHtml(plan.directDispatch.message) + '</p>',
+        '<p><strong>Selected task update:</strong> Selected task will be updated with dispatch evidence for ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + ' only after the @codex comment is posted.</p>',
+        '<p><strong>GitHub write:</strong> ' + escapeHtml(dispatch.recorded ? "Posted @codex PR comment: " + dispatch.postedComment.url : "Preview only. No GitHub or Notion writes performed.") + '</p>',
+        '<p><strong>Notion write:</strong> ' + escapeHtml(dispatch.recorded ? "Posted comment URL and awaiting status recorded." : "Preview only. No Notion writes performed.") + '</p>',
+        status ? '<p><strong>Codex status:</strong> ' + escapeHtml(status.label + " - " + status.summary) + '</p>' : '',
+        '<h3>@codex PR Comment</h3><pre class="proposal-pre">' + escapeHtml(dispatch.comment.body) + '</pre>',
         '<h3>Next Action</h3><p>' + escapeHtml(plan.proposedNextAction) + '</p>',
         renderList('Safety Boundaries', dispatch.packet.safetyBoundaries),
         renderList('Diagnostics', Object.values(dispatch.diagnostics || {})),
-        '<h3>Dispatch Packet</h3><pre class="proposal-pre">' + escapeHtml(dispatch.packet.markdown) + '</pre>',
-        '<h3>Approval Boundary</h3><p>Codex Dispatch records a packet only. It does not start Codex, merge, deploy, approve production, or bypass Review + Iteration Desk.</p>'
+        '<h3>Fallback Prompt</h3><pre class="proposal-pre">' + escapeHtml(dispatch.comment.fallbackPrompt) + '</pre>',
+        '<h3>Secondary Audit Packet</h3><pre class="proposal-pre">' + escapeHtml(dispatch.packet.markdown) + '</pre>',
+        '<h3>Approval Boundary</h3><p>Codex Dispatch posts a GitHub @codex PR comment and records evidence only. It does not merge, deploy, approve production, or bypass Review + Iteration Desk.</p>'
       ].join("");
     }
 
@@ -690,8 +699,9 @@ export function renderOperatorConsolePage(): string {
         implementationPreviewButton.disabled = true;
         implementationApproveButton.disabled = true;
         codexDispatchRecordButton.disabled = true;
+        codexDispatchStatusButton.disabled = true;
         closeoutCommitButton.disabled = true;
-        setStatus(previewStatus, isReviewDeskMode() ? "Running review..." : isCodexDispatchMode() ? "Preparing Codex Dispatch packet..." : isPostMergeCloseoutMode() ? "Generating closeout preview..." : "Generating preview...");
+        setStatus(previewStatus, isReviewDeskMode() ? "Running review..." : isCodexDispatchMode() ? "Preparing @codex comment preview..." : isPostMergeCloseoutMode() ? "Generating closeout preview..." : "Generating preview...");
         if (isReviewDeskMode()) {
           const repo = reviewRepo.value.trim();
           const prNumber = Number(reviewPrNumber.value.trim());
@@ -734,13 +744,14 @@ export function renderOperatorConsolePage(): string {
           state.codexDispatchApproval = payload.approval;
           state.codexDispatchPreview = payload.preview;
           renderCodexDispatchResult(payload.preview);
-          briefHash.textContent = "Packet " + payload.approval.previewHash.slice(0, 12);
+          briefHash.textContent = "Comment " + payload.approval.previewHash.slice(0, 12);
           expiresAt.textContent = "Expires " + new Date(payload.approval.expiresAt).toLocaleString();
           approvalPanel.hidden = false;
           revisionPanel.hidden = true;
           approveButton.disabled = true;
           codexDispatchRecordButton.disabled = false;
-          setStatus(previewStatus, "Codex Dispatch packet prepared. No Notion or GitHub writes performed.", "ok");
+          codexDispatchStatusButton.disabled = true;
+          setStatus(previewStatus, "@codex comment preview ready. No Notion or GitHub writes performed.", "ok");
           showResult(payload.run);
           return;
         }
@@ -878,7 +889,7 @@ export function renderOperatorConsolePage(): string {
 
       try {
         codexDispatchRecordButton.disabled = true;
-        setStatus(previewStatus, "Recording Codex Dispatch packet to Notion...");
+        setStatus(previewStatus, "Posting @codex comment and recording dispatch evidence...");
         const payload = await agentFetch("/agent-office/codex-dispatch/record", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -886,11 +897,43 @@ export function renderOperatorConsolePage(): string {
         });
         state.codexDispatchPreview = payload.result;
         renderCodexDispatchResult(payload.result);
-        setStatus(previewStatus, "Codex Dispatch packet recorded to Notion.", "ok");
+        codexDispatchStatusButton.disabled = false;
+        setStatus(previewStatus, "@codex comment posted and recorded. Awaiting Codex response evidence.", "ok");
         showResult(payload.run);
       } catch (error) {
         codexDispatchRecordButton.disabled = false;
         setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    codexDispatchStatusButton.addEventListener("click", async function () {
+      const dispatch = state.codexDispatchPreview;
+      if (!state.selectedTask || !dispatch || !dispatch.recorded || !dispatch.postedComment) {
+        return;
+      }
+
+      try {
+        codexDispatchStatusButton.disabled = true;
+        setStatus(previewStatus, "Checking GitHub for Codex response evidence...");
+        const payload = await agentFetch("/agent-office/codex-dispatch/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dispatchCommentCreatedAt: dispatch.postedComment.createdAt,
+            dispatchCommentId: dispatch.postedComment.id,
+            pullRequestNumber: dispatch.input.pullRequestNumber,
+            repository: dispatch.input.repository,
+            taskId: state.selectedTask.taskId
+          })
+        });
+        state.codexDispatchPreview = Object.assign({}, dispatch, { codexStatus: payload.status });
+        renderCodexDispatchResult(state.codexDispatchPreview);
+        setStatus(previewStatus, "Codex status refreshed: " + payload.status.label + ".", "ok");
+        showResult(payload.run);
+      } catch (error) {
+        setStatus(previewStatus, error.message, "error");
+      } finally {
+        codexDispatchStatusButton.disabled = false;
       }
     });
 

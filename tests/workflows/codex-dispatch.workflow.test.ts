@@ -71,6 +71,14 @@ const task: AiBuildTask = {
   url: "https://www.notion.so/Add-Post-Merge-Closeout-v0-364b258f9a3e8153a329c184b7f6a630",
 };
 
+const postedComment = {
+  author: "sherif-agent-office-orchestrator[bot]",
+  body: "@codex implement this work order on this PR branch.",
+  createdAt: "2026-05-18T09:31:00.000Z",
+  id: 123,
+  url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21#issuecomment-123",
+};
+
 const evidence: CodexDispatchEvidence = {
   collectedAt: "2026-05-18T09:00:00.000Z",
   pullRequest: {
@@ -93,7 +101,24 @@ const evidence: CodexDispatchEvidence = {
 
 function createService(overrides: Partial<CodexDispatchEvidence> = {}) {
   return {
+    collectStatus: vi.fn().mockResolvedValue({
+      checkedAt: "2026-05-18T09:30:00.000Z",
+      dispatchCommentCreatedAt: postedComment.createdAt,
+      dispatchCommentId: postedComment.id,
+      label: "Codex responded/reviewed",
+      signals: [
+        {
+          actor: "chatgpt-codex-connector[bot]",
+          createdAt: "2026-05-18T09:35:00.000Z",
+          summary: "Codex review detected.",
+          type: "codex_review",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21#pullrequestreview-1",
+        },
+      ],
+      summary: "1 GitHub signal found after the @codex dispatch comment.",
+    }),
     collectEvidence: vi.fn().mockResolvedValue({ ...evidence, ...overrides }),
+    postDispatchComment: vi.fn().mockResolvedValue(postedComment),
   } as unknown as CodexDispatchService;
 }
 
@@ -119,7 +144,7 @@ function createWorkflow(input: {
 }
 
 describe("CodexDispatchWorkflow", () => {
-  it("creates a deterministic PR #21-style dispatch packet from work-order metadata", async () => {
+  it("creates a deterministic PR #21-style @codex dispatch comment from work-order metadata", async () => {
     const { packet, plan } = createCodexDispatchPlan({
       evidence,
       request: {
@@ -130,7 +155,7 @@ describe("CodexDispatchWorkflow", () => {
       task,
     });
 
-    expect(plan.directDispatch.status).toBe("unavailable_not_configured");
+    expect(plan.githubDispatch.status).toBe("ready_to_post");
     expect(packet.markdown).toContain(`- Repository: ${repository}`);
     expect(packet.markdown).toContain(`- Implementation branch: ${branchName}`);
     expect(packet.markdown).toContain("- Pull request: #21");
@@ -201,9 +226,10 @@ describe("CodexDispatchWorkflow", () => {
     expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
   });
 
-  it("records the previewed packet after explicit approval", async () => {
+  it("posts the previewed @codex comment and records it after explicit approval", async () => {
     const repository = createRepository();
-    const workflow = createWorkflow({ repository });
+    const service = createService();
+    const workflow = createWorkflow({ repository, service });
     const preview = await workflow.preview({
       pullRequestNumber: 21,
       repository: "SherifHaidar/chief-of-staff-agent-office",
@@ -224,8 +250,17 @@ describe("CodexDispatchWorkflow", () => {
       wroteToNotion: true,
       dispatch: {
         blockAppended: true,
+        postedComment,
+        codexStatus: {
+          label: "awaiting Codex response",
+        },
         recorded: true,
       },
+    });
+    expect(service.postDispatchComment).toHaveBeenCalledWith({
+      body: expect.stringContaining("@codex implement this work order"),
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
     });
     expect(repository.appendCodexDispatchResult).toHaveBeenCalledOnce();
   });
@@ -243,6 +278,7 @@ describe("CodexDispatchWorkflow", () => {
             headSha: "new-head-sha",
           },
         }),
+      postDispatchComment: vi.fn(),
     } as unknown as CodexDispatchService;
     const workflow = createWorkflow({ repository, service });
     const preview = await workflow.preview({
@@ -266,7 +302,8 @@ describe("CodexDispatchWorkflow", () => {
       },
     });
     expect(service.collectEvidence).toHaveBeenCalledTimes(2);
-    expect(repository.fetchTask).toHaveBeenCalledOnce();
+    expect(repository.fetchTask).not.toHaveBeenCalled();
+    expect(service.postDispatchComment).not.toHaveBeenCalled();
     expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
   });
 
@@ -283,6 +320,7 @@ describe("CodexDispatchWorkflow", () => {
             state: "closed",
           },
         }),
+      postDispatchComment: vi.fn(),
     } as unknown as CodexDispatchService;
     const workflow = createWorkflow({ repository, service });
     const preview = await workflow.preview({
@@ -306,7 +344,42 @@ describe("CodexDispatchWorkflow", () => {
       },
     });
     expect(service.collectEvidence).toHaveBeenCalledTimes(2);
-    expect(repository.fetchTask).toHaveBeenCalledOnce();
+    expect(repository.fetchTask).not.toHaveBeenCalled();
+    expect(service.postDispatchComment).not.toHaveBeenCalled();
+    expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
+  });
+
+  it("refreshes Codex status from GitHub evidence without writing to Notion", async () => {
+    const repository = createRepository();
+    const service = createService();
+    const workflow = createWorkflow({ repository, service });
+
+    const result = await workflow.status({
+      dispatchCommentCreatedAt: postedComment.createdAt,
+      dispatchCommentId: postedComment.id,
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      ok: true,
+      status: {
+        label: "Codex responded/reviewed",
+      },
+      wroteToNotion: false,
+    });
+    expect(service.collectStatus).toHaveBeenCalledWith(
+      {
+        dispatchCommentCreatedAt: postedComment.createdAt,
+        dispatchCommentId: postedComment.id,
+        pullRequestNumber: 21,
+        repository: "SherifHaidar/chief-of-staff-agent-office",
+        taskId: pageId,
+      },
+      new Date("2026-05-18T09:30:00.000Z"),
+    );
     expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
   });
 
@@ -314,7 +387,7 @@ describe("CodexDispatchWorkflow", () => {
     const dispatcher = new DisabledDirectCodexDispatcher();
 
     await expect(dispatcher.dispatch()).resolves.toEqual({
-      message: expect.stringContaining("unavailable"),
+      message: expect.stringContaining("GitHub @codex"),
       status: "unavailable_not_configured",
     });
   });

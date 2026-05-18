@@ -105,10 +105,10 @@ The page is public as a shell, but every `/agent-office/*` request it makes requ
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
 - Architecture Desk revisions: provide feedback, generate revised previews, and approve only the latest satisfactory preview.
 - Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep or Controlled Implementation.
-- Codex Dispatch: preview a deterministic packet for an existing work-order PR/task, then record that packet to the Notion task after explicit confirmation. It does not start Codex.
+- Codex Dispatch: preview a short `@codex` PR comment for an existing work-order PR/task, post it only after explicit confirmation, record the comment URL/status to Notion, and refresh GitHub evidence for Codex responses or applied commits.
 - Post-Merge Closeout: preview merged-PR evidence and planned Notion writes, then commit the closeout only after an explicit click.
 
-Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval. Recording a Codex Dispatch packet records instructions only; direct Codex execution is unavailable in v0.
+Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval. Codex Dispatch posts only the previewed `@codex` PR comment and records evidence; it does not merge, deploy, or bypass Review + Iteration Desk.
 
 ## HTTP API
 
@@ -228,7 +228,7 @@ curl -X POST http://127.0.0.1:3000/agent-office/review-desk \
   -d '{"repository":"SherifHaidar/personal-chief-of-staff","pullRequestNumber":6,"taskId":"<notion-task-id>"}'
 ```
 
-Preview Codex Dispatch v0 for an open implementation work-order PR:
+Preview the Codex Dispatch v0 `@codex` comment for an open implementation work-order PR:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/preview \
@@ -237,13 +237,22 @@ curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/preview \
   -d '{"repository":"SherifHaidar/chief-of-staff-agent-office","pullRequestNumber":22,"taskId":"<notion-task-id>"}'
 ```
 
-Record the previewed Codex Dispatch packet to the selected Notion task after checking the preview:
+Post the previewed `@codex` comment and record the comment URL/status to the selected Notion task:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/record \
   -H "Content-Type: application/json" \
   -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
   -d '{"approvalToken":"<codex-dispatch-approval-token>"}'
+```
+
+Refresh Codex Dispatch status from GitHub comments, reviews, review-thread comments, and PR commits after the posted `@codex` comment:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/status \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"repository":"SherifHaidar/chief-of-staff-agent-office","pullRequestNumber":22,"taskId":"<notion-task-id>","dispatchCommentCreatedAt":"<posted-comment-created-at>","dispatchCommentId":123}'
 ```
 
 Preview Post-Merge Closeout v0 for an already-merged PR:
@@ -319,7 +328,7 @@ Required for Codex Dispatch v0:
 - `GITHUB_APP_ID`
 - `GITHUB_APP_INSTALLATION_ID`
 - `GITHUB_APP_PRIVATE_KEY`
-- `GITHUB_ALLOWED_REPOS` must include every repo whose work-order PR packets can be prepared or recorded
+- `GITHUB_ALLOWED_REPOS` must include every repo whose work-order PR `@codex` comments can be previewed, posted, recorded, or checked
 
 Required for Product Context Pack:
 
@@ -346,7 +355,7 @@ Recommended explicit configuration:
 
 Use long random values for `AGENT_OFFICE_API_KEY` and `AGENT_OFFICE_APPROVAL_SECRET`. The approval secret signs short-lived approval tokens and should be different from the API key.
 
-The GitHub App should be installed only on repos Agent Office needs to prepare or review, currently `SherifHaidar/personal-chief-of-staff` and `SherifHaidar/chief-of-staff-agent-office`, and should have `Metadata: read`, `Contents: read/write`, `Pull requests: read/write`, and check/status/deployment read access if available. Product Context Pack and Review Desk use the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, or settings permissions.
+The GitHub App should be installed only on repos Agent Office needs to prepare or review, currently `SherifHaidar/personal-chief-of-staff` and `SherifHaidar/chief-of-staff-agent-office`, and should have `Metadata: read`, `Contents: read/write`, `Pull requests: read/write`, PR conversation comment access through `Pull requests: write` or `Issues: write`, and check/status/deployment read access if available. Product Context Pack and Review Desk use the same GitHub App access model; do not add a second GitHub token. Do not grant Administration, Actions write, secrets, or settings permissions.
 
 The Notion integration must be able to read the AI Build Tasks database, read task page content, read the product context page, append blocks to task pages, and update the configured status property.
 
