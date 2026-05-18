@@ -230,6 +230,86 @@ describe("CodexDispatchWorkflow", () => {
     expect(repository.appendCodexDispatchResult).toHaveBeenCalledOnce();
   });
 
+  it("revalidates the PR head SHA before recording", async () => {
+    const repository = createRepository();
+    const service = {
+      collectEvidence: vi
+        .fn()
+        .mockResolvedValueOnce(evidence)
+        .mockResolvedValueOnce({
+          ...evidence,
+          pullRequest: {
+            ...evidence.pullRequest,
+            headSha: "new-head-sha",
+          },
+        }),
+    } as unknown as CodexDispatchService;
+    const workflow = createWorkflow({ repository, service });
+    const preview = await workflow.preview({
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(preview.ok).toBe(true);
+    if (!preview.ok || preview.dispatch.recorded) {
+      throw new Error("Expected preview.");
+    }
+
+    const result = await workflow.record({ preview: preview.dispatch });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringContaining("head SHA changed"),
+        statusCode: 409,
+      },
+    });
+    expect(service.collectEvidence).toHaveBeenCalledTimes(2);
+    expect(repository.fetchTask).toHaveBeenCalledOnce();
+    expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
+  });
+
+  it("refuses to record when PR revalidation finds the PR closed", async () => {
+    const repository = createRepository();
+    const service = {
+      collectEvidence: vi
+        .fn()
+        .mockResolvedValueOnce(evidence)
+        .mockResolvedValueOnce({
+          ...evidence,
+          pullRequest: {
+            ...evidence.pullRequest,
+            state: "closed",
+          },
+        }),
+    } as unknown as CodexDispatchService;
+    const workflow = createWorkflow({ repository, service });
+    const preview = await workflow.preview({
+      pullRequestNumber: 21,
+      repository: "SherifHaidar/chief-of-staff-agent-office",
+      taskId: pageId,
+    });
+
+    expect(preview.ok).toBe(true);
+    if (!preview.ok || preview.dispatch.recorded) {
+      throw new Error("Expected preview.");
+    }
+
+    const result = await workflow.record({ preview: preview.dispatch });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringContaining("must still be open"),
+        statusCode: 409,
+      },
+    });
+    expect(service.collectEvidence).toHaveBeenCalledTimes(2);
+    expect(repository.fetchTask).toHaveBeenCalledOnce();
+    expect(repository.appendCodexDispatchResult).not.toHaveBeenCalled();
+  });
+
   it("keeps direct Codex execution disabled in v0", async () => {
     const dispatcher = new DisabledDirectCodexDispatcher();
 

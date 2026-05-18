@@ -1,5 +1,6 @@
 import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type {
+  CodexDispatchEvidence,
   CodexDispatchInput,
   CodexDispatchPreview,
   CodexDispatchRecordResult,
@@ -50,6 +51,47 @@ export type CodexDispatchWorkflowDependencies = {
   now?: () => Date;
   taskRepository: CodexDispatchTaskRepository;
 };
+
+function assertPreviewMatchesCurrentPullRequest(input: {
+  currentEvidence: CodexDispatchEvidence;
+  preview: CodexDispatchPreview;
+}): void {
+  const currentPullRequest = input.currentEvidence.pullRequest;
+  const previewPullRequest = input.preview.evidence.pullRequest;
+  const issues: string[] = [];
+
+  if (currentPullRequest.state !== "open") {
+    issues.push(`Pull request must still be open. Current state: ${currentPullRequest.state}.`);
+  }
+
+  if (currentPullRequest.repository !== previewPullRequest.repository) {
+    issues.push(
+      `Pull request repository changed from ${previewPullRequest.repository} to ${currentPullRequest.repository}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (currentPullRequest.pullRequestNumber !== previewPullRequest.pullRequestNumber) {
+    issues.push(
+      `Pull request number changed from ${previewPullRequest.pullRequestNumber} to ${currentPullRequest.pullRequestNumber}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (currentPullRequest.headSha !== previewPullRequest.headSha) {
+    issues.push(
+      `Pull request head SHA changed from ${previewPullRequest.headSha} to ${currentPullRequest.headSha}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (currentPullRequest.headBranch !== previewPullRequest.headBranch) {
+    issues.push(
+      `Pull request head branch changed from ${previewPullRequest.headBranch} to ${currentPullRequest.headBranch}. Refresh the Codex Dispatch preview before recording.`,
+    );
+  }
+
+  if (issues.length > 0) {
+    throw Object.assign(new Error(`Codex Dispatch PR revalidation failed: ${issues.join(" ")}`), { statusCode: 409 });
+  }
+}
 
 export class CodexDispatchWorkflow {
   private readonly dispatchService: CodexDispatchService;
@@ -121,6 +163,8 @@ export class CodexDispatchWorkflow {
     try {
       pageId = normalizeNotionPageId(input.preview.input.taskId);
       const generatedAt = this.now();
+      const currentEvidence = await this.dispatchService.collectEvidence(input.preview.input, generatedAt);
+      assertPreviewMatchesCurrentPullRequest({ currentEvidence, preview: input.preview });
       const task = await this.taskRepository.fetchTask(pageId);
       const duplicateMarkerCount = countCodexDispatchMarker(task.contentMarkdown, input.preview.plan.dispatchMarker);
 
