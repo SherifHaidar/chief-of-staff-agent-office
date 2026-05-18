@@ -336,6 +336,7 @@ describe("CodexDispatchWorkflow", () => {
       throw new Error("Expected preview.");
     }
 
+    vi.mocked(repository.fetchTask).mockClear();
     const result = await workflow.record({ preview: preview.dispatch });
 
     expect(result).toMatchObject({
