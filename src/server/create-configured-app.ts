@@ -2,6 +2,7 @@ import { JsonlRunLog } from "../audit/run-log.js";
 import { AnthropicClaudeReviewRunner } from "../agents/claude-review.agent.js";
 import type { AppEnv } from "../config/env.js";
 import { GitHubAppClient } from "../github/github-app-client.js";
+import { CodexDispatchService } from "../github/codex-dispatch.service.js";
 import { GitHubDraftPrService } from "../github/github-draft-pr.service.js";
 import { ImplementationService } from "../github/implementation.service.js";
 import { PostMergeCloseoutService } from "../github/post-merge-closeout.service.js";
@@ -14,6 +15,7 @@ import {
 } from "../index.js";
 import { consoleLogger } from "../utils/logger.js";
 import { GitHubDraftPrWorkflow } from "../workflows/github-draft-pr.workflow.js";
+import { CodexDispatchWorkflow } from "../workflows/codex-dispatch.workflow.js";
 import { ImplementationWorkflow } from "../workflows/implementation.workflow.js";
 import { PostMergeCloseoutWorkflow } from "../workflows/post-merge-closeout.workflow.js";
 import { ReviewDeskWorkflow } from "../workflows/review-desk.workflow.js";
@@ -94,6 +96,38 @@ function getMissingPostMergeCloseoutConfiguration(env: AppEnv): string[] {
   ].filter((value): value is string => Boolean(value));
 }
 
+function getMissingCodexDispatchConfiguration(env: AppEnv): string[] {
+  return [
+    env.GITHUB_APP_ID ? undefined : "GITHUB_APP_ID",
+    env.GITHUB_APP_INSTALLATION_ID ? undefined : "GITHUB_APP_INSTALLATION_ID",
+    env.GITHUB_APP_PRIVATE_KEY ? undefined : "GITHUB_APP_PRIVATE_KEY",
+  ].filter((value): value is string => Boolean(value));
+}
+
+function createCodexDispatchWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
+  const appId = env.GITHUB_APP_ID;
+  const installationId = env.GITHUB_APP_INSTALLATION_ID;
+  const privateKey = env.GITHUB_APP_PRIVATE_KEY;
+  if (getMissingCodexDispatchConfiguration(env).length > 0 || !appId || !installationId || !privateKey) {
+    return undefined;
+  }
+
+  const githubClient = new GitHubAppClient({
+    appId,
+    installationId,
+    privateKey,
+  });
+  const dispatchService = new CodexDispatchService(githubClient, {
+    allowedRepositories: parseCsvList(env.GITHUB_ALLOWED_REPOS, [env.TARGET_PRODUCT_REPO]),
+  });
+
+  return new CodexDispatchWorkflow({
+    dispatchService,
+    logger: consoleLogger,
+    taskRepository,
+  });
+}
+
 function createPostMergeCloseoutWorkflowIfConfigured(env: AppEnv, taskRepository: ReturnType<typeof createNotionTaskRepository>) {
   const appId = env.GITHUB_APP_ID;
   const installationId = env.GITHUB_APP_INSTALLATION_ID;
@@ -161,8 +195,10 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
   const codexHandoffWorkflow = createCodexHandoffWorkflow(env);
   const githubDraftPrWorkflow = createGitHubDraftPrWorkflowIfConfigured(env, taskRepository);
   const implementationWorkflow = createImplementationWorkflowIfConfigured(env, taskRepository);
+  const missingCodexDispatchConfiguration = getMissingCodexDispatchConfiguration(env);
   const missingReviewDeskConfiguration = getMissingReviewDeskConfiguration(env);
   const missingPostMergeCloseoutConfiguration = getMissingPostMergeCloseoutConfiguration(env);
+  const codexDispatchWorkflow = createCodexDispatchWorkflowIfConfigured(env, taskRepository);
   const postMergeCloseoutWorkflow = createPostMergeCloseoutWorkflowIfConfigured(env, taskRepository);
   const reviewDeskWorkflow = createReviewDeskWorkflowIfConfigured(env, taskRepository);
   const implementationReadyStatus = env.NOTION_STATUS_AFTER_CODEX_HANDOFF ?? "In Codex";
@@ -174,6 +210,11 @@ export function createConfiguredAgentOfficeApp(env: AppEnv) {
     approvedCodexHandoffWriter: codexHandoffWorkflow,
     approvedGitHubDraftPrWriter: githubDraftPrWorkflow,
     approvedImplementationWriter: implementationWorkflow,
+    codexDispatchConfigurationMessage:
+      missingCodexDispatchConfiguration.length > 0
+        ? `Codex Dispatch is blocked until this configuration is set: ${missingCodexDispatchConfiguration.join(", ")}.`
+        : undefined,
+    codexDispatchWorkflow,
     codexHandoffWorkflow,
     githubDraftPrWorkflow,
     implementationReadyScanner: {

@@ -2,6 +2,7 @@ export type AgentOfficeRunOutcome = "failed" | "skipped" | "succeeded";
 export type AgentOfficeWorkflow =
   | "architect-review"
   | "architect-review-revision"
+  | "codex-dispatch"
   | "codex-handoff"
   | "github-draft-pr-prep"
   | "implementation"

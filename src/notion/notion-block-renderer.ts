@@ -5,6 +5,7 @@ import {
   type ArchitectBriefWritebackMetadata,
 } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import type { CodexDispatchRecordResult } from "../domain/codex-dispatch.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
 import { IMPLEMENTATION_PENDING_NOTICE } from "../domain/implementation-proposal.js";
@@ -303,6 +304,34 @@ export function renderPostMergeCloseoutBlocks(result: PostMergeCloseoutResult, g
     heading(3, "Approval Boundary"),
     ...paragraph(
       "Closeout records an already-merged PR. It does not merge, deploy, approve production, or dispatch Codex fixes automatically.",
+    ),
+  ];
+}
+
+export function renderCodexDispatchBlocks(result: CodexDispatchRecordResult, generatedAt: Date): NotionAppendBlock[] {
+  const pullRequest = result.evidence.pullRequest;
+
+  return [
+    { type: "divider", divider: {} },
+    heading(2, `Codex Dispatch: ${pullRequest.repository}#${pullRequest.pullRequestNumber}`),
+    ...paragraph(`Packet recorded by chief-of-staff-agent-office Codex Dispatch at ${generatedAt.toISOString()}.`),
+    heading(3, "Idempotency Marker"),
+    ...paragraph(result.plan.dispatchMarker),
+    heading(3, "Pull Request"),
+    ...paragraph(`${pullRequest.title}: ${pullRequest.url}`),
+    heading(3, "Work Order"),
+    ...paragraph(result.evidence.workOrder.path),
+    heading(3, "Record Status"),
+    ...paragraph(result.plan.proposedRecordStatus),
+    heading(3, "Next Action"),
+    ...paragraph(result.plan.proposedNextAction),
+    heading(3, "Direct Dispatch"),
+    ...paragraph(result.plan.directDispatch.message),
+    heading(3, "Packet"),
+    ...paragraph(result.packet.markdown),
+    heading(3, "Approval Boundary"),
+    ...paragraph(
+      "Codex Dispatch records a packet only. It does not start Codex, merge, deploy, approve production, or bypass Review + Iteration Desk.",
     ),
   ];
 }

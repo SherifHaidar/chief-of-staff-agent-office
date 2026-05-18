@@ -105,9 +105,10 @@ The page is public as a shell, but every `/agent-office/*` request it makes requ
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
 - Architecture Desk revisions: provide feedback, generate revised previews, and approve only the latest satisfactory preview.
 - Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep or Controlled Implementation.
+- Codex Dispatch: preview a deterministic packet for an existing work-order PR/task, then record that packet to the Notion task after explicit confirmation. It does not start Codex.
 - Post-Merge Closeout: preview merged-PR evidence and planned Notion writes, then commit the closeout only after an explicit click.
 
-Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval.
+Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval. Recording a Codex Dispatch packet records instructions only; direct Codex execution is unavailable in v0.
 
 ## HTTP API
 
@@ -227,6 +228,24 @@ curl -X POST http://127.0.0.1:3000/agent-office/review-desk \
   -d '{"repository":"SherifHaidar/personal-chief-of-staff","pullRequestNumber":6,"taskId":"<notion-task-id>"}'
 ```
 
+Preview Codex Dispatch v0 for an open implementation work-order PR:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/preview \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"repository":"SherifHaidar/chief-of-staff-agent-office","pullRequestNumber":22,"taskId":"<notion-task-id>"}'
+```
+
+Record the previewed Codex Dispatch packet to the selected Notion task after checking the preview:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/codex-dispatch/record \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"approvalToken":"<codex-dispatch-approval-token>"}'
+```
+
 Preview Post-Merge Closeout v0 for an already-merged PR:
 
 ```bash
@@ -294,6 +313,13 @@ Required for Post-Merge Closeout v0:
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_ALLOWED_REPOS` must include every repo being closed out
 - `NOTION_STATUS_AFTER_POST_MERGE_CLOSEOUT=Merged`
+
+Required for Codex Dispatch v0:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_INSTALLATION_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_ALLOWED_REPOS` must include every repo whose work-order PR packets can be prepared or recorded
 
 Required for Product Context Pack:
 

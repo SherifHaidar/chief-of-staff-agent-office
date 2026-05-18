@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArchitectBrief } from "../src/domain/architect-brief.js";
+import type { CodexDispatchRecordResult } from "../src/domain/codex-dispatch.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../src/domain/implementation-proposal.js";
 import { IMPLEMENTATION_PENDING_NOTICE } from "../src/domain/implementation-proposal.js";
 import type { PostMergeCloseoutResult } from "../src/domain/post-merge-closeout.js";
@@ -8,6 +9,7 @@ import type { ReviewDeskResult } from "../src/domain/review-desk.js";
 import {
   chunkBlocks,
   renderArchitectBriefBlocks,
+  renderCodexDispatchBlocks,
   renderImplementationResultBlocks,
   renderPostMergeCloseoutBlocks,
   renderReviewDeskResultBlocks,
@@ -376,5 +378,81 @@ describe("renderPostMergeCloseoutBlocks", () => {
     expect(serialized).toContain("post-merge-closeout:SherifHaidar/chief-of-staff-agent-office#21:merge-sha");
     expect(serialized).toContain("Selected Task PR Link Check");
     expect(serialized).toContain("does not merge, deploy, approve production, or dispatch Codex fixes automatically");
+  });
+});
+
+describe("renderCodexDispatchBlocks", () => {
+  it("renders packet-only dispatch language without implying Codex started", () => {
+    const result: CodexDispatchRecordResult = {
+      blockAppended: true,
+      diagnostics: {
+        directDispatch: "Direct Codex execution is unavailable in Codex Dispatch v0.",
+        githubVerification: "work-order PR verified",
+        idempotency: "dispatch marker not present; packet block can be recorded",
+        metadataValidation: "selected task, work-order file, repository, branch, and PR metadata match",
+        notionTaskTarget: "Codex Dispatch v0 (22222222-2222-2222-2222-222222222222)",
+      },
+      evidence: {
+        collectedAt: "2026-05-18T09:00:00.000Z",
+        pullRequest: {
+          baseBranch: "main",
+          draft: true,
+          headBranch: "agent-office/impl-dispatch",
+          headSha: "head-sha",
+          pullRequestNumber: 22,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          state: "open",
+          title: "Add Codex Dispatch v0",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/22",
+        },
+        workOrder: {
+          markdown: "# Work order",
+          path: ".agent-office/work-orders/22222222-2222-2222-2222-222222222222.md",
+          summary: {
+            acceptanceChecklist: [],
+            constraints: [],
+            implementationScope: [],
+            implementationSteps: [],
+            testsToRun: [],
+          },
+        },
+      },
+      generatedAt: "2026-05-18T09:30:00.000Z",
+      input: {
+        pullRequestNumber: 22,
+        repository: "SherifHaidar/chief-of-staff-agent-office",
+        taskId: "22222222-2222-2222-2222-222222222222",
+      },
+      notionTask: {
+        pageId: "22222222-2222-2222-2222-222222222222",
+        title: "Codex Dispatch v0",
+      },
+      packet: {
+        markdown: "# Codex Dispatch Packet",
+        nextAction: "Open Codex manually, then send to Review + Iteration Desk.",
+        safetyBoundaries: ["Do not merge.", "Do not deploy production."],
+        title: "Codex Dispatch Packet: SherifHaidar/chief-of-staff-agent-office#22",
+      },
+      plan: {
+        directDispatch: {
+          message: "Direct Codex execution is unavailable in Codex Dispatch v0.",
+          status: "unavailable_not_configured",
+        },
+        dispatchMarker: "codex-dispatch:SherifHaidar/chief-of-staff-agent-office#22:head-sha",
+        duplicateMarkerCount: 0,
+        markerAlreadyExists: false,
+        proposedNextAction: "Open Codex manually, then send to Review + Iteration Desk.",
+        proposedRecordStatus: "Codex Dispatch packet recorded",
+        writeTargets: ["Notion task page block for Codex Dispatch v0"],
+      },
+      recorded: true,
+    };
+
+    const serialized = JSON.stringify(renderCodexDispatchBlocks(result, new Date("2026-05-18T09:30:00.000Z")));
+
+    expect(serialized).toContain("Codex Dispatch");
+    expect(serialized).toContain("Codex Dispatch packet recorded");
+    expect(serialized).toContain("does not start Codex");
+    expect(serialized).not.toContain("Codex started");
   });
 });
