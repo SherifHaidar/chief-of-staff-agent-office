@@ -369,7 +369,11 @@ function resultHasBrief(result: AnyWorkflowResult): boolean {
     return "review" in result.result ? Boolean(result.result.review) : false;
   }
 
-  return Boolean(result.proposal);
+  if ("proposal" in result) {
+    return Boolean(result.proposal);
+  }
+
+  return false;
 }
 
 function buildRunSummary(input: {
