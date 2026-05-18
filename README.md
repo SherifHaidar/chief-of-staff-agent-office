@@ -105,6 +105,7 @@ The page is public as a shell, but every `/agent-office/*` request it makes requ
 - Architecture Desk: list `Ready for Architecture` tasks, preview Architect Briefs, approve exact writeback.
 - Architecture Desk revisions: provide feedback, generate revised previews, and approve only the latest satisfactory preview.
 - Implementation Desk: list `Ready for Codex` tasks, preview Codex Handoff Briefs, approve exact writeback, then preview/approve GitHub Draft PR Prep or Controlled Implementation.
+- Post-Merge Closeout: preview merged-PR evidence and planned Notion writes, then commit the closeout only after an explicit click.
 
 Approval tokens expire after 120 minutes. Each revised Architect Brief preview creates a new signed token and replaces the active token in the console. Approval endpoints write or execute the exact previewed payload embedded in the submitted signed token and do not rerun the model or regenerate GitHub proposal content. Approving an Architect Brief or Codex Handoff never starts coding; Controlled Implementation requires its own exact proposal approval.
 
@@ -226,6 +227,24 @@ curl -X POST http://127.0.0.1:3000/agent-office/review-desk \
   -d '{"repository":"SherifHaidar/personal-chief-of-staff","pullRequestNumber":6,"taskId":"<notion-task-id>"}'
 ```
 
+Preview Post-Merge Closeout v0 for an already-merged PR:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/post-merge-closeout/preview \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"repository":"SherifHaidar/chief-of-staff-agent-office","pullRequestNumber":20,"taskId":"<notion-task-id>"}'
+```
+
+Commit the previewed Post-Merge Closeout to the Notion task after checking the preview:
+
+```bash
+curl -X POST http://127.0.0.1:3000/agent-office/post-merge-closeout/commit \
+  -H "Content-Type: application/json" \
+  -H "x-agent-office-api-key: $AGENT_OFFICE_API_KEY" \
+  -d '{"repository":"SherifHaidar/chief-of-staff-agent-office","pullRequestNumber":20,"taskId":"<notion-task-id>"}'
+```
+
 Batch dry-run architecture-ready tasks:
 
 ```bash
@@ -268,6 +287,14 @@ Required for Review + Iteration Desk v0:
 - `REVIEW_DESK_MAX_CHANGED_FILES=30`
 - `REVIEW_DESK_MAX_PATCH_CHARS=8000`
 
+Required for Post-Merge Closeout v0:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_INSTALLATION_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_ALLOWED_REPOS` must include every repo being closed out
+- `NOTION_STATUS_AFTER_POST_MERGE_CLOSEOUT=Merged`
+
 Required for Product Context Pack:
 
 - `PRODUCT_CONTEXT_PAGE_ID=361b258f9a3e819f8cd9f9e33d768e0a`
@@ -283,6 +310,7 @@ Recommended explicit configuration:
 - `NOTION_READY_FOR_CODEX_STATUS=Ready for Codex`
 - `NOTION_STATUS_AFTER_ARCHITECT=Ready for Codex`
 - `NOTION_STATUS_AFTER_CODEX_HANDOFF=In Codex`
+- `NOTION_STATUS_AFTER_POST_MERGE_CLOSEOUT=Merged`
 - `TARGET_PRODUCT_REPO=SherifHaidar/personal-chief-of-staff`
 - `PRODUCT_CONTEXT_MAX_FILES=10`
 - `PRODUCT_CONTEXT_MAX_FILE_CHARS=8000`

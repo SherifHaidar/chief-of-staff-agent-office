@@ -272,4 +272,71 @@ describe("NotionTaskRepository ready architecture scanning", () => {
       }),
     ).rejects.toThrow("Task must be In Codex before controlled implementation. Current status: Ready for Codex.");
   });
+
+  it("plans and writes supported Post-Merge Closeout task properties", async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const client = createClient({
+      pages: {
+        retrieve: vi.fn().mockResolvedValue({
+          properties: {
+            "Merge SHA": { rich_text: [], type: "rich_text" },
+            "PR Link": { type: "url", url: null },
+            Status: { select: { name: "In Codex" }, type: "select" },
+          },
+        }),
+        update,
+      },
+    });
+    const repository = createRepository(client);
+    const task = {
+      contentMarkdown: "Task page content.",
+      pageId,
+      properties: {
+        "Merge SHA": { rich_text: [], type: "rich_text" },
+        "PR Link": { type: "url", url: null },
+        Status: { select: { name: "In Codex" }, type: "select" },
+      },
+      status: "In Codex",
+      title: "Post-Merge Closeout v0",
+    };
+    const plan = repository.createPostMergeCloseoutPlan({
+      evidence: {
+        collectedAt: "2026-05-17T12:00:00.000Z",
+        deployment: { deployments: [], message: "No deployment evidence.", status: "missing" },
+        pullRequest: {
+          baseBranch: "main",
+          headBranch: "agent-office/impl-closeout",
+          mergeSha: "merge-sha",
+          merged: true,
+          mergedAt: "2026-05-17T11:00:00.000Z",
+          mergedBy: "SherifHaidar",
+          pullRequestNumber: 21,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          state: "closed",
+          title: "Add Post-Merge Closeout v0",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+        },
+      },
+      mergedStatusName: "Merged",
+      task,
+    });
+
+    const writes = await repository.writePostMergeCloseoutProperties(pageId, plan);
+
+    expect(writes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Status", status: "written", value: "Merged" }),
+        expect.objectContaining({ name: "PR Link", status: "written" }),
+        expect.objectContaining({ name: "Merge SHA", status: "written", value: "merge-sha" }),
+      ]),
+    );
+    expect(update).toHaveBeenCalledWith({
+      page_id: pageId,
+      properties: expect.objectContaining({
+        "Merge SHA": { rich_text: [{ text: { content: "merge-sha" }, type: "text" }] },
+        "PR Link": { url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21" },
+        Status: { select: { name: "Merged" } },
+      }),
+    });
+  });
 });

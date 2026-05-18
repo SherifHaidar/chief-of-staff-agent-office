@@ -86,6 +86,7 @@ export function renderOperatorConsolePage(): string {
             <option value="codexHandoff">Codex Handoff Desk</option>
             <option value="implementationReady">Implementation Ready</option>
             <option value="reviewDesk">Review + Iteration Desk</option>
+            <option value="postMergeCloseout">Post-Merge Closeout</option>
           </select>
         </div>
         <div>
@@ -124,6 +125,7 @@ export function renderOperatorConsolePage(): string {
             <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
             <button id="implementationPreviewButton" hidden disabled>Preview work order</button>
             <button class="primary" id="implementationApproveButton" hidden disabled>Create work-order PR</button>
+            <button class="primary" id="closeoutCommitButton" hidden disabled>Commit closeout</button>
           </div>
         </div>
         <div class="status" id="previewStatus"></div>
@@ -186,6 +188,13 @@ export function renderOperatorConsolePage(): string {
         readyLabel: "Implementation task",
         taskEndpoint: "/agent-office/tasks/implementation-ready",
         workflowName: "Review + Iteration Desk"
+      },
+      postMergeCloseout: {
+        previewButtonLabel: "Preview closeout",
+        previewTitle: "Post-Merge Closeout",
+        readyLabel: "Implementation task",
+        taskEndpoint: "/agent-office/tasks/implementation-ready",
+        workflowName: "Post-Merge Closeout"
       }
     };
 
@@ -199,6 +208,7 @@ export function renderOperatorConsolePage(): string {
       implementationApproval: null,
       implementationProposal: null,
       mode: sessionStorage.getItem("agentOfficeDeskMode") || "architecture",
+      postMergeCloseoutPreview: null,
       productContext: null,
       reviewDeskResult: null,
       revisionNumber: 0,
@@ -217,6 +227,7 @@ export function renderOperatorConsolePage(): string {
     const briefHash = document.getElementById("briefHash");
     const briefPreview = document.getElementById("briefPreview");
     const clearButton = document.getElementById("clearButton");
+    const closeoutCommitButton = document.getElementById("closeoutCommitButton");
     const deskMode = document.getElementById("deskMode");
     const expiresAt = document.getElementById("expiresAt");
     const githubApproveButton = document.getElementById("githubApproveButton");
@@ -265,14 +276,20 @@ export function renderOperatorConsolePage(): string {
       return state.mode === "reviewDesk";
     }
 
+    function isPostMergeCloseoutMode() {
+      return state.mode === "postMergeCloseout";
+    }
+
     function syncControlsForMode() {
       previewButton.hidden = isImplementationReadyMode();
-      approveButton.hidden = isImplementationReadyMode() || isReviewDeskMode();
+      approveButton.hidden = isImplementationReadyMode() || isReviewDeskMode() || isPostMergeCloseoutMode();
       githubPreviewButton.hidden = !isCodexHandoffMode();
       githubApproveButton.hidden = !isCodexHandoffMode();
       implementationPreviewButton.hidden = !isImplementationReadyMode();
       implementationApproveButton.hidden = !isImplementationReadyMode();
-      reviewDeskInputs.hidden = !isReviewDeskMode();
+      closeoutCommitButton.hidden = !isPostMergeCloseoutMode();
+      reviewDeskInputs.hidden = !(isReviewDeskMode() || isPostMergeCloseoutMode());
+      reviewRepo.previousElementSibling.textContent = isPostMergeCloseoutMode() ? "Closeout repo" : "Review repo";
       previewButton.textContent = activeDesk().previewButtonLabel;
     }
 
@@ -312,6 +329,7 @@ export function renderOperatorConsolePage(): string {
       state.githubProposal = null;
       state.implementationApproval = null;
       state.implementationProposal = null;
+      state.postMergeCloseoutPreview = null;
       state.productContext = null;
       state.reviewDeskResult = null;
       state.revisionNumber = 0;
@@ -328,6 +346,7 @@ export function renderOperatorConsolePage(): string {
       githubApproveButton.disabled = true;
       implementationPreviewButton.disabled = true;
       implementationApproveButton.disabled = true;
+      closeoutCommitButton.disabled = true;
       revisionFeedback.value = "";
       revisionPanel.hidden = true;
       reviseButton.disabled = true;
@@ -363,6 +382,7 @@ export function renderOperatorConsolePage(): string {
       state.githubProposal = null;
       state.implementationApproval = null;
       state.implementationProposal = null;
+      state.postMergeCloseoutPreview = null;
       state.productContext = null;
       state.reviewDeskResult = null;
       state.revisionNumber = 0;
@@ -375,6 +395,7 @@ export function renderOperatorConsolePage(): string {
       githubApproveButton.disabled = true;
       implementationPreviewButton.disabled = !isImplementationReadyMode();
       implementationApproveButton.disabled = true;
+      closeoutCommitButton.disabled = true;
       approvalPanel.hidden = true;
       revisionFeedback.value = "";
       revisionPanel.hidden = true;
@@ -387,6 +408,11 @@ export function renderOperatorConsolePage(): string {
     function renderArtifact(artifact) {
       if (isReviewDeskMode()) {
         renderReviewDeskResult(artifact);
+        return;
+      }
+
+      if (isPostMergeCloseoutMode()) {
+        renderPostMergeCloseoutResult(artifact);
         return;
       }
 
@@ -453,6 +479,37 @@ export function renderOperatorConsolePage(): string {
         renderList('Acceptance Checklist', (review.acceptanceChecklist || []).map(function (item) { return item.status + ': ' + item.criterion + ' - ' + item.notes; })),
         renderList('Suggested Smoke Tests', review.suggestedSmokeTests),
         review.verdict === 'Needs Codex Fixes' && review.codexFixBrief ? '<h3>Draft Codex Fix Brief</h3><p>' + escapeHtml(review.codexFixBrief.summary) + '</p>' + renderList('Fix Instructions', review.codexFixBrief.instructions) + renderList('Verification', review.codexFixBrief.verification) : ''
+      ].join("");
+    }
+
+    function renderPostMergeCloseoutResult(closeout) {
+      const evidence = closeout.evidence;
+      const pr = evidence.pullRequest;
+      const plan = closeout.plan;
+      const writes = closeout.committed ? closeout.propertyWrites : plan.propertyWrites;
+      const deploymentSummary = evidence.deployment.status === "found"
+        ? evidence.deployment.deployments.map(function (deployment) {
+            return (deployment.environment || "deployment") + ": " + (deployment.state || "unknown") + (deployment.url ? " - " + deployment.url : "");
+          })
+        : [evidence.deployment.status + ": " + (evidence.deployment.message || "No deployment evidence.")];
+      const writeSummary = writes.map(function (write) {
+        return write.name + ": " + write.status + (write.value !== undefined ? " -> " + write.value : "") + (write.reason ? " (" + write.reason + ")" : "");
+      });
+
+      briefPreview.innerHTML = [
+        '<div class="brief-title">' + escapeHtml(closeout.committed ? "Committed closeout" : "Preview closeout") + '</div>',
+        '<p><strong>PR:</strong> ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + '</p>',
+        '<p><strong>Selected task update:</strong> Selected task will be updated with closeout evidence for ' + escapeHtml(pr.repository) + '#' + escapeHtml(pr.pullRequestNumber) + '.</p>',
+        '<p><strong>Task PR Link check:</strong> ' + escapeHtml(plan.taskPrLinkCheck ? plan.taskPrLinkCheck.message : "No task PR Link check returned.") + '</p>',
+        '<p><strong>Merged:</strong> ' + escapeHtml(pr.mergedAt) + ' by ' + escapeHtml(pr.mergedBy || "unknown") + '</p>',
+        '<p><strong>Merge SHA:</strong> ' + escapeHtml(pr.mergeSha) + '</p>',
+        '<p><strong>Idempotency marker:</strong> ' + escapeHtml(plan.closeoutMarker) + '</p>',
+        '<p><strong>Notion write:</strong> ' + escapeHtml(closeout.committed ? (closeout.blockAppended ? "Properties written and closeout block appended." : "Properties written; closeout block already existed and was not duplicated.") : "Preview only. No Notion writes performed.") + '</p>',
+        renderList('Deployment Evidence', deploymentSummary),
+        renderList('Notion Property Writes', writeSummary),
+        renderList('Diagnostics', Object.values(closeout.diagnostics || {})),
+        '<h3>Closeout Block Preview</h3><pre class="proposal-pre">' + escapeHtml(plan.blockPreview) + '</pre>',
+        '<h3>Approval Boundary</h3><p>Post-Merge Closeout records an already-merged PR. It does not merge, deploy, approve production, or dispatch Codex fixes.</p>'
       ].join("");
     }
 
@@ -585,7 +642,8 @@ export function renderOperatorConsolePage(): string {
         githubApproveButton.disabled = true;
         implementationPreviewButton.disabled = true;
         implementationApproveButton.disabled = true;
-        setStatus(previewStatus, isReviewDeskMode() ? "Running review..." : "Generating preview...");
+        closeoutCommitButton.disabled = true;
+        setStatus(previewStatus, isReviewDeskMode() ? "Running review..." : isPostMergeCloseoutMode() ? "Generating closeout preview..." : "Generating preview...");
         if (isReviewDeskMode()) {
           const repo = reviewRepo.value.trim();
           const prNumber = Number(reviewPrNumber.value.trim());
@@ -607,6 +665,31 @@ export function renderOperatorConsolePage(): string {
           revisionPanel.hidden = true;
           approveButton.disabled = true;
           setStatus(previewStatus, "Review packet written to Notion.", "ok");
+          showResult(payload.run);
+          return;
+        }
+        if (isPostMergeCloseoutMode()) {
+          const repo = reviewRepo.value.trim();
+          const prNumber = Number(reviewPrNumber.value.trim());
+          if (!repo || !Number.isInteger(prNumber) || prNumber <= 0) {
+            throw new Error("Closeout repo and PR number are required.");
+          }
+          const payload = await agentFetch("/agent-office/post-merge-closeout/preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pullRequestNumber: prNumber,
+              repository: repo,
+              taskId: state.selectedTask.taskId
+            })
+          });
+          state.postMergeCloseoutPreview = payload.preview;
+          renderPostMergeCloseoutResult(payload.preview);
+          approvalPanel.hidden = true;
+          revisionPanel.hidden = true;
+          approveButton.disabled = true;
+          closeoutCommitButton.disabled = false;
+          setStatus(previewStatus, "Closeout preview ready. No Notion writes performed.", "ok");
           showResult(payload.run);
           return;
         }
@@ -708,6 +791,33 @@ export function renderOperatorConsolePage(): string {
         }
       } catch (error) {
         approveButton.disabled = false;
+        setStatus(previewStatus, error.message, "error");
+      }
+    });
+
+    closeoutCommitButton.addEventListener("click", async function () {
+      if (!state.selectedTask || !state.postMergeCloseoutPreview) {
+        return;
+      }
+
+      try {
+        closeoutCommitButton.disabled = true;
+        setStatus(previewStatus, "Committing post-merge closeout to Notion...");
+        const payload = await agentFetch("/agent-office/post-merge-closeout/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pullRequestNumber: state.postMergeCloseoutPreview.input.pullRequestNumber,
+            repository: state.postMergeCloseoutPreview.input.repository,
+            taskId: state.selectedTask.taskId
+          })
+        });
+        state.postMergeCloseoutPreview = payload.result;
+        renderPostMergeCloseoutResult(payload.result);
+        setStatus(previewStatus, "Post-merge closeout written to Notion.", "ok");
+        showResult(payload.run);
+      } catch (error) {
+        closeoutCommitButton.disabled = false;
         setStatus(previewStatus, error.message, "error");
       }
     });

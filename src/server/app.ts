@@ -32,6 +32,7 @@ import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
 import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import { PostMergeCloseoutInputSchema } from "../domain/post-merge-closeout.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { ReviewDeskInputSchema } from "../domain/review-desk.js";
 import type {
@@ -54,6 +55,7 @@ import type {
   ImplementationPreviewInput,
   ImplementationWorkflowResult,
 } from "../workflows/implementation.workflow.js";
+import type { PostMergeCloseoutWorkflowResult } from "../workflows/post-merge-closeout.workflow.js";
 import type { ReviewDeskWorkflowResult } from "../workflows/review-desk.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
 import { renderOperatorConsolePage } from "./operator-console-page.js";
@@ -120,6 +122,11 @@ export type ReviewDeskWorkflowRunner = {
   run(input: z.infer<typeof ReviewDeskInputSchema>): Promise<ReviewDeskWorkflowResult>;
 };
 
+export type PostMergeCloseoutWorkflowRunner = {
+  commit(input: z.infer<typeof PostMergeCloseoutInputSchema>): Promise<PostMergeCloseoutWorkflowResult>;
+  preview(input: z.infer<typeof PostMergeCloseoutInputSchema>): Promise<PostMergeCloseoutWorkflowResult>;
+};
+
 export type AgentOfficeAppOptions = {
   apiKey: string;
   approvalSecret: string;
@@ -131,6 +138,8 @@ export type AgentOfficeAppOptions = {
   githubDraftPrWorkflow?: GitHubDraftPrWorkflowRunner;
   implementationReadyScanner?: ImplementationReadyTaskScanner;
   implementationWorkflow?: ImplementationWorkflowRunner;
+  postMergeCloseoutConfigurationMessage?: string;
+  postMergeCloseoutWorkflow?: PostMergeCloseoutWorkflowRunner;
   readyArchitectureScanner: ReadyArchitectureTaskScanner;
   readyCodexScanner?: ReadyCodexTaskScanner;
   reviewDeskConfigurationMessage?: string;
@@ -146,6 +155,7 @@ type AnyWorkflowResult =
   | CodexHandoffWorkflowResult
   | GitHubDraftPrWorkflowResult
   | ImplementationWorkflowResult
+  | PostMergeCloseoutWorkflowResult
   | ReviewDeskWorkflowResult
   | WorkflowResult;
 
@@ -326,7 +336,7 @@ function resultHasBrief(result: AnyWorkflowResult): boolean {
   }
 
   if ("result" in result) {
-    return Boolean(result.result.review);
+    return "review" in result.result ? Boolean(result.result.review) : false;
   }
 
   return Boolean(result.proposal);
@@ -1409,6 +1419,112 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       startedAt,
       taskId: parsed.data.taskId,
       workflow: "review-desk",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      result: result.result,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/post-merge-closeout/preview", async (request, reply) => {
+    const parsed = PostMergeCloseoutInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = options.postMergeCloseoutWorkflow;
+    if (!workflow) {
+      return reply.code(503).send({
+        error:
+          options.postMergeCloseoutConfigurationMessage ??
+          "Post-Merge Closeout is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.preview(parsed.data);
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "post-merge-closeout",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      preview: result.result,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/post-merge-closeout/commit", async (request, reply) => {
+    const parsed = PostMergeCloseoutInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = options.postMergeCloseoutWorkflow;
+    if (!workflow) {
+      return reply.code(503).send({
+        error:
+          options.postMergeCloseoutConfigurationMessage ??
+          "Post-Merge Closeout is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.commit(parsed.data);
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "post-merge-closeout",
     });
     await recordRun(runLog, run);
 

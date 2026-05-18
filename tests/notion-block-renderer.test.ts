@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { ArchitectBrief } from "../src/domain/architect-brief.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../src/domain/implementation-proposal.js";
 import { IMPLEMENTATION_PENDING_NOTICE } from "../src/domain/implementation-proposal.js";
+import type { PostMergeCloseoutResult } from "../src/domain/post-merge-closeout.js";
 import type { ReviewDeskResult } from "../src/domain/review-desk.js";
 import {
   chunkBlocks,
   renderArchitectBriefBlocks,
   renderImplementationResultBlocks,
+  renderPostMergeCloseoutBlocks,
   renderReviewDeskResultBlocks,
 } from "../src/notion/notion-block-renderer.js";
 
@@ -286,5 +288,93 @@ describe("renderReviewDeskResultBlocks", () => {
     expect(serialized).toContain("Fix approval-boundary wording.");
     expect(serialized).toContain("Replace approval copy.");
     expect(serialized).toContain("Run renderer tests.");
+  });
+});
+
+describe("renderPostMergeCloseoutBlocks", () => {
+  it("renders the closeout marker and approval boundary", () => {
+    const result: PostMergeCloseoutResult = {
+      blockAppended: true,
+      committed: true,
+      diagnostics: {
+        deploymentLookup: "missing: No GitHub deployment records were found for the merge commit.",
+        githubVerification: "merged PR verified at 2026-05-17T11:00:00.000Z with merge SHA merge-sha",
+        idempotency: "marker not present; closeout block can be appended",
+        notionTaskTarget: "Post-Merge Closeout v0 (22222222-2222-2222-2222-222222222222)",
+        properties: ["Status: planned select update"],
+        taskPrLink: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
+      },
+      evidence: {
+        collectedAt: "2026-05-17T12:00:00.000Z",
+        deployment: {
+          deployments: [],
+          message: "No GitHub deployment records were found for the merge commit.",
+          status: "missing",
+        },
+        pullRequest: {
+          baseBranch: "main",
+          headBranch: "agent-office/impl-closeout",
+          mergeSha: "merge-sha",
+          merged: true,
+          mergedAt: "2026-05-17T11:00:00.000Z",
+          mergedBy: "SherifHaidar",
+          pullRequestNumber: 21,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          state: "closed",
+          title: "Add Post-Merge Closeout v0",
+          url: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+        },
+      },
+      generatedAt: "2026-05-17T12:30:00.000Z",
+      input: {
+        pullRequestNumber: 21,
+        repository: "SherifHaidar/chief-of-staff-agent-office",
+        taskId: "22222222-2222-2222-2222-222222222222",
+      },
+      notionTask: {
+        currentStatus: "In Codex",
+        pageId: "22222222-2222-2222-2222-222222222222",
+        title: "Post-Merge Closeout v0",
+      },
+      plan: {
+        blockPreview: "Post-Merge Closeout: SherifHaidar/chief-of-staff-agent-office#21",
+        closeoutMarker: "post-merge-closeout:SherifHaidar/chief-of-staff-agent-office#21:merge-sha",
+        duplicateMarkerCount: 0,
+        markerAlreadyExists: false,
+        propertyWrites: [
+          {
+            name: "Status",
+            source: "Status after post-merge closeout",
+            status: "written",
+            type: "select",
+            value: "Merged",
+          },
+        ],
+        taskPrLinkCheck: {
+          message: "Selected Notion task PR Link matches SherifHaidar/chief-of-staff-agent-office#21.",
+          propertyName: "PR Link",
+          pullRequestNumber: 21,
+          repository: "SherifHaidar/chief-of-staff-agent-office",
+          status: "match",
+          value: "https://github.com/SherifHaidar/chief-of-staff-agent-office/pull/21",
+        },
+      },
+      propertyWrites: [
+        {
+          name: "Status",
+          source: "Status after post-merge closeout",
+          status: "written",
+          type: "select",
+          value: "Merged",
+        },
+      ],
+    };
+
+    const serialized = JSON.stringify(renderPostMergeCloseoutBlocks(result, new Date("2026-05-17T12:30:00.000Z")));
+
+    expect(serialized).toContain("Post-Merge Closeout");
+    expect(serialized).toContain("post-merge-closeout:SherifHaidar/chief-of-staff-agent-office#21:merge-sha");
+    expect(serialized).toContain("Selected Task PR Link Check");
+    expect(serialized).toContain("does not merge, deploy, approve production, or dispatch Codex fixes automatically");
   });
 });
