@@ -17,6 +17,11 @@ import {
   verifyCodexHandoffApproval,
 } from "../approval/codex-handoff-approval.js";
 import {
+  CodexDispatchApprovalTokenError,
+  createCodexDispatchApproval,
+  verifyCodexDispatchApproval,
+} from "../approval/codex-dispatch-approval.js";
+import {
   createGitHubDraftPrApproval,
   GitHubDraftPrApprovalTokenError,
   verifyGitHubDraftPrApproval,
@@ -32,6 +37,7 @@ import type { AgentOfficeRunSummary } from "../audit/run-summary.js";
 import { createRunId } from "../audit/run-summary.js";
 import { createArchitectBriefApprovalMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import { CodexDispatchInputSchema, CodexDispatchStatusInputSchema } from "../domain/codex-dispatch.js";
 import { PostMergeCloseoutInputSchema } from "../domain/post-merge-closeout.js";
 import type { ReadyArchitectureTask } from "../domain/ready-architecture-task.js";
 import { ReviewDeskInputSchema } from "../domain/review-desk.js";
@@ -45,6 +51,10 @@ import type {
   CodexHandoffWorkflowInput,
   CodexHandoffWorkflowResult,
 } from "../workflows/codex-handoff.workflow.js";
+import type {
+  CodexDispatchStatusWorkflowResult,
+  CodexDispatchWorkflowResult,
+} from "../workflows/codex-dispatch.workflow.js";
 import type {
   ApprovedGitHubDraftPrInput,
   GitHubDraftPrPreviewInput,
@@ -127,6 +137,12 @@ export type PostMergeCloseoutWorkflowRunner = {
   preview(input: z.infer<typeof PostMergeCloseoutInputSchema>): Promise<PostMergeCloseoutWorkflowResult>;
 };
 
+export type CodexDispatchWorkflowRunner = {
+  preview(input: z.infer<typeof CodexDispatchInputSchema>): Promise<CodexDispatchWorkflowResult>;
+  record(input: { preview: ReturnType<typeof verifyCodexDispatchApproval>["preview"] }): Promise<CodexDispatchWorkflowResult>;
+  status(input: z.infer<typeof CodexDispatchStatusInputSchema>): Promise<CodexDispatchStatusWorkflowResult>;
+};
+
 export type AgentOfficeAppOptions = {
   apiKey: string;
   approvalSecret: string;
@@ -135,6 +151,8 @@ export type AgentOfficeAppOptions = {
   approvedGitHubDraftPrWriter?: ApprovedGitHubDraftPrWriter;
   approvedImplementationWriter?: ApprovedImplementationWriter;
   codexHandoffWorkflow?: CodexHandoffWorkflowRunner;
+  codexDispatchConfigurationMessage?: string;
+  codexDispatchWorkflow?: CodexDispatchWorkflowRunner;
   githubDraftPrWorkflow?: GitHubDraftPrWorkflowRunner;
   implementationReadyScanner?: ImplementationReadyTaskScanner;
   implementationWorkflow?: ImplementationWorkflowRunner;
@@ -153,6 +171,8 @@ export type AgentOfficeAppOptions = {
 
 type AnyWorkflowResult =
   | CodexHandoffWorkflowResult
+  | CodexDispatchStatusWorkflowResult
+  | CodexDispatchWorkflowResult
   | GitHubDraftPrWorkflowResult
   | ImplementationWorkflowResult
   | PostMergeCloseoutWorkflowResult
@@ -187,6 +207,12 @@ const CodexHandoffRequestSchema = z
   .strict();
 
 const CodexHandoffApprovalRequestSchema = z
+  .object({
+    approvalToken: z.string().trim().min(1, "approvalToken is required"),
+  })
+  .strict();
+
+const CodexDispatchApprovalRequestSchema = z
   .object({
     approvalToken: z.string().trim().min(1, "approvalToken is required"),
   })
@@ -335,11 +361,19 @@ function resultHasBrief(result: AnyWorkflowResult): boolean {
     return Boolean(result.handoff);
   }
 
+  if ("dispatch" in result) {
+    return Boolean(result.dispatch);
+  }
+
   if ("result" in result) {
     return "review" in result.result ? Boolean(result.result.review) : false;
   }
 
-  return Boolean(result.proposal);
+  if ("proposal" in result) {
+    return Boolean(result.proposal);
+  }
+
+  return false;
 }
 
 function buildRunSummary(input: {
@@ -987,6 +1021,203 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
       ok: true,
       run,
       statusUpdated: result.statusUpdated,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-dispatch/preview", async (request, reply) => {
+    const parsed = CodexDispatchInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = options.codexDispatchWorkflow;
+    if (!workflow) {
+      return reply.code(503).send({
+        error:
+          options.codexDispatchConfigurationMessage ??
+          "Codex Dispatch is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.preview(parsed.data);
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "codex-dispatch",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    if (result.dispatch.recorded) {
+      return reply.code(500).send({
+        error: "Codex Dispatch preview returned a recorded result.",
+        ok: false,
+        run,
+        taskId: result.pageId,
+      });
+    }
+
+    const approval = createCodexDispatchApproval({
+      preview: result.dispatch,
+      previewRunId: run.runId,
+      secret: approvalSecret,
+    });
+
+    return reply.send({
+      approval,
+      ok: true,
+      preview: result.dispatch,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-dispatch/record", async (request, reply) => {
+    const parsed = CodexDispatchApprovalRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+      });
+    }
+
+    let approval;
+    try {
+      approval = verifyCodexDispatchApproval({
+        secret: approvalSecret,
+        token: parsed.data.approvalToken,
+      });
+    } catch (error) {
+      if (error instanceof CodexDispatchApprovalTokenError) {
+        return reply.code(401).send({
+          error: error.message,
+          ok: false,
+        });
+      }
+
+      throw error;
+    }
+
+    const workflow = options.codexDispatchWorkflow;
+    if (!workflow) {
+      return reply.code(503).send({
+        error:
+          options.codexDispatchConfigurationMessage ??
+          "Codex Dispatch is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: approval.preview.input.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.record({ preview: approval.preview });
+    const run = buildRunSummary({
+      dryRun: false,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: approval.preview.input.taskId,
+      taskName: approval.preview.notionTask.title,
+      workflow: "codex-dispatch",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? approval.preview.input.taskId,
+      });
+    }
+
+    return reply.send({
+      approval: {
+        expiresAt: approval.expiresAt,
+        previewHash: approval.previewHash,
+        previewRunId: approval.previewRunId,
+      },
+      ok: true,
+      result: result.dispatch,
+      run,
+      taskId: result.pageId,
+    });
+  });
+
+  app.post("/agent-office/codex-dispatch/status", async (request, reply) => {
+    const parsed = CodexDispatchStatusInputSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: formatValidationError(parsed.error),
+        ok: false,
+        taskId: getTaskIdFromBody(request.body),
+      });
+    }
+
+    const workflow = options.codexDispatchWorkflow;
+    if (!workflow?.status) {
+      return reply.code(503).send({
+        error:
+          options.codexDispatchConfigurationMessage ??
+          "Codex Dispatch status is blocked until GitHub App credentials are configured.",
+        ok: false,
+        status: "blocked",
+        taskId: parsed.data.taskId,
+      });
+    }
+
+    const startedAt = new Date();
+    const result = await workflow.status(parsed.data);
+    const run = buildRunSummary({
+      dryRun: true,
+      finishedAt: new Date(),
+      result,
+      runId: createRunId(startedAt),
+      startedAt,
+      taskId: parsed.data.taskId,
+      workflow: "codex-dispatch",
+    });
+    await recordRun(runLog, run);
+
+    if (!result.ok) {
+      return reply.code(workflowSerializedErrorStatus(result.error)).send({
+        error: result.error.message,
+        ok: false,
+        run,
+        taskId: result.pageId ?? parsed.data.taskId,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      run,
+      status: result.status,
       taskId: result.pageId,
     });
   });

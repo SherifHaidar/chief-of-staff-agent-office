@@ -2,6 +2,7 @@ import type { AiBuildTask } from "../domain/ai-build-task.js";
 import type { ArchitectBrief } from "../domain/architect-brief.js";
 import type { ArchitectBriefWritebackMetadata } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import type { CodexDispatchRecordResult } from "../domain/codex-dispatch.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
 import type {
@@ -19,6 +20,7 @@ import {
   chunkBlocks,
   renderArchitectBriefBlocks,
   renderCodexHandoffBriefBlocks,
+  renderCodexDispatchBlocks,
   renderGitHubDraftPrResultBlocks,
   renderImplementationResultBlocks,
   renderPostMergeCloseoutBlocks,
@@ -289,6 +291,18 @@ export class NotionTaskRepository {
   async appendCodexHandoffBrief(pageId: string, brief: CodexHandoffBrief, generatedAt: Date): Promise<void> {
     const normalizedPageId = normalizeNotionPageId(pageId);
     const blocks = renderCodexHandoffBriefBlocks(brief, generatedAt);
+
+    for (const chunk of chunkBlocks(blocks)) {
+      await this.client.blocks.children.append({
+        block_id: normalizedPageId,
+        children: chunk,
+      });
+    }
+  }
+
+  async appendCodexDispatchResult(pageId: string, result: CodexDispatchRecordResult, generatedAt: Date): Promise<void> {
+    const normalizedPageId = normalizeNotionPageId(pageId);
+    const blocks = renderCodexDispatchBlocks(result, generatedAt);
 
     for (const chunk of chunkBlocks(blocks)) {
       await this.client.blocks.children.append({

@@ -5,6 +5,7 @@ import {
   type ArchitectBriefWritebackMetadata,
 } from "../domain/architect-brief-writeback.js";
 import type { CodexHandoffBrief } from "../domain/codex-handoff-brief.js";
+import type { CodexDispatchRecordResult } from "../domain/codex-dispatch.js";
 import type { GitHubDraftPrExecutionResult } from "../domain/github-draft-pr.js";
 import type { ImplementationExecutionResult, ImplementationProposal } from "../domain/implementation-proposal.js";
 import { IMPLEMENTATION_PENDING_NOTICE } from "../domain/implementation-proposal.js";
@@ -303,6 +304,40 @@ export function renderPostMergeCloseoutBlocks(result: PostMergeCloseoutResult, g
     heading(3, "Approval Boundary"),
     ...paragraph(
       "Closeout records an already-merged PR. It does not merge, deploy, approve production, or dispatch Codex fixes automatically.",
+    ),
+  ];
+}
+
+export function renderCodexDispatchBlocks(result: CodexDispatchRecordResult, generatedAt: Date): NotionAppendBlock[] {
+  const pullRequest = result.evidence.pullRequest;
+
+  return [
+    { type: "divider", divider: {} },
+    heading(2, `Codex Dispatch: ${pullRequest.repository}#${pullRequest.pullRequestNumber}`),
+    ...paragraph(`@codex dispatch comment posted by chief-of-staff-agent-office Codex Dispatch at ${generatedAt.toISOString()}.`),
+    heading(3, "Idempotency Marker"),
+    ...paragraph(result.plan.dispatchMarker),
+    heading(3, "Pull Request"),
+    ...paragraph(`${pullRequest.title}: ${pullRequest.url}`),
+    heading(3, "Work Order"),
+    ...paragraph(result.evidence.workOrder.path),
+    heading(3, "Posted GitHub Comment"),
+    ...paragraph(`${result.postedComment.url} by ${result.postedComment.author} at ${result.postedComment.createdAt}`),
+    heading(3, "Record Status"),
+    ...paragraph(result.plan.proposedRecordStatus),
+    heading(3, "Codex Status"),
+    ...paragraph(`${result.codexStatus.label}: ${result.codexStatus.summary}`),
+    heading(3, "Next Action"),
+    ...paragraph(result.plan.proposedNextAction),
+    heading(3, "Posted @codex Comment"),
+    ...paragraph(result.comment.body),
+    heading(3, "Fallback Copy-Ready Prompt"),
+    ...paragraph(result.comment.fallbackPrompt),
+    heading(3, "Secondary Audit Packet"),
+    ...paragraph(result.packet.markdown),
+    heading(3, "Approval Boundary"),
+    ...paragraph(
+      "Codex Dispatch posts a GitHub @codex PR comment and records evidence only. It does not merge, deploy, approve production, or bypass Review + Iteration Desk.",
     ),
   ];
 }

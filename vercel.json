@@ -42,6 +42,18 @@
       "destination": "/api/agent-office/codex-handoff/approve"
     },
     {
+      "source": "/agent-office/codex-dispatch/preview",
+      "destination": "/api/agent-office/codex-dispatch/preview"
+    },
+    {
+      "source": "/agent-office/codex-dispatch/record",
+      "destination": "/api/agent-office/codex-dispatch/record"
+    },
+    {
+      "source": "/agent-office/codex-dispatch/status",
+      "destination": "/api/agent-office/codex-dispatch/status"
+    },
+    {
       "source": "/agent-office/github/draft-pr",
       "destination": "/api/agent-office/github/draft-pr"
     },
