@@ -126,7 +126,9 @@ describe("Agent Office API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
-    expect(response.body).toContain("Operator Console v0");
+    expect(response.body).toContain("Operator Console");
+    expect(response.body).toContain("Command center for approval-gated Agent Office workflows.");
+    expect(response.body).toContain("Showcase");
 
     await app.close();
   });
