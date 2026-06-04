@@ -9,61 +9,86 @@ export function renderOperatorConsolePage(): string {
     :root {
       color-scheme: light;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #f6f7f9;
+      --bg: #eef2f5;
       --panel: #ffffff;
-      --text: #17202a;
-      --muted: #607084;
-      --border: #d7dde6;
+      --panel-soft: #f8fafc;
+      --text: #182230;
+      --muted: #667085;
+      --border: #d0d7e2;
       --accent: #0f766e;
-      --accent-strong: #0b5d56;
+      --accent-strong: #0a5f57;
+      --ink: #101828;
       --danger: #b42318;
       --ok: #117044;
-      --shadow: 0 16px 40px rgba(23, 32, 42, 0.08);
+      --shadow: 0 18px 44px rgba(24, 34, 48, 0.10);
+      --shadow-soft: 0 8px 24px rgba(24, 34, 48, 0.06);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); }
-    main { width: min(1180px, calc(100vw - 32px)); margin: 32px auto 56px; display: grid; gap: 18px; }
-    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
-    h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 720; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 44%, #e8edf3 100%); color: var(--text); }
+    main { width: min(1240px, calc(100vw - 32px)); margin: 28px auto 56px; display: grid; gap: 18px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 4px 2px 8px; }
+    h1 { margin: 0; font-size: 30px; line-height: 1.12; font-weight: 760; color: var(--ink); }
     h2 { margin: 0 0 12px; font-size: 18px; line-height: 1.2; }
-    h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0; color: var(--muted); }
+    h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0; color: var(--muted); }
     p { margin: 0; color: var(--muted); line-height: 1.5; }
-    .grid { display: grid; grid-template-columns: minmax(280px, 390px) minmax(0, 1fr); gap: 18px; align-items: start; }
-    section, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
+    .eyebrow { margin-bottom: 5px; color: var(--accent-strong); font-size: 12px; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
+    .top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+    .showcase-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0; border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; background: rgba(255, 255, 255, 0.82); box-shadow: var(--shadow-soft); color: var(--text); cursor: pointer; }
+    .showcase-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+    .showcase-toggle span { font-size: 12px; font-weight: 760; }
+    .grid { display: grid; grid-template-columns: minmax(292px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+    section, .panel { background: rgba(255, 255, 255, 0.94); border: 1px solid rgba(208, 215, 226, 0.92); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
+    section { backdrop-filter: blur(10px); }
+    .panel { background: var(--panel-soft); box-shadow: none; }
+    .section-heading { display: grid; gap: 4px; margin-bottom: 4px; }
+    .section-heading h2 { margin: 0; color: var(--ink); }
+    .field { display: grid; gap: 8px; }
+    .credential-panel { display: grid; gap: 8px; }
     label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
     input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
     textarea { min-height: 94px; resize: vertical; line-height: 1.45; }
     input:focus, select:focus, textarea:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
-    button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; min-height: 38px; padding: 8px 12px; font: inherit; font-weight: 650; cursor: pointer; }
+    button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; min-height: 38px; padding: 8px 12px; font: inherit; font-weight: 680; cursor: pointer; box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04); transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease; }
     button:hover { border-color: var(--accent); color: var(--accent-strong); }
+    button:active { transform: translateY(1px); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-strong); color: #fff; }
     button.danger { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); }
     button:disabled { opacity: 0.48; cursor: not-allowed; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .stack { display: grid; gap: 12px; }
-    .tasks { display: grid; gap: 8px; margin-top: 12px; }
-    .task { width: 100%; text-align: left; display: grid; gap: 5px; padding: 11px 12px; }
-    .task strong { font-size: 14px; }
+    .tasks { display: grid; gap: 8px; margin-top: 4px; }
+    .task { width: 100%; text-align: left; display: grid; gap: 6px; padding: 12px; background: var(--panel-soft); }
+    .task strong { font-size: 14px; color: var(--ink); }
     .meta { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
-    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: #fbfcfd; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: #fbfcfd; color: #475467; }
     .status { min-height: 22px; font-size: 13px; color: var(--muted); }
     .status.error { color: var(--danger); }
     .status.ok { color: var(--ok); }
-    .brief { display: grid; gap: 10px; }
-    .brief-title { font-size: 20px; font-weight: 720; color: var(--text); }
+    .preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .preview-actions { justify-content: flex-end; }
+    .brief { display: grid; gap: 12px; }
+    .brief-title { font-size: 22px; font-weight: 760; color: var(--ink); line-height: 1.2; }
     .brief p, .brief li { color: var(--text); line-height: 1.5; }
     .brief ul { margin: 6px 0 0; padding-left: 20px; }
-    .empty { min-height: 260px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; }
-    .proposal-pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); background: #fbfcfd; border-radius: 6px; padding: 12px; max-height: 260px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .context-summary { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: #fbfcfd; display: grid; gap: 6px; }
+    .empty { min-height: 280px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; background: var(--panel-soft); }
+    .proposal-pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); background: #f8fafc; border-radius: 6px; padding: 12px; max-height: 280px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .context-summary { border: 1px solid var(--border); border-radius: 6px; padding: 12px; background: #f8fafc; display: grid; gap: 7px; }
     .context-summary strong { font-size: 13px; }
     .context-summary .gaps { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .result { white-space: pre-wrap; overflow-wrap: anywhere; background: #0f172a; color: #e5edf7; border-radius: 8px; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 320px; overflow: auto; }
+    body.showcase-mode .credential-panel,
+    body.showcase-mode .result { display: none; }
+    body.showcase-mode main { width: min(1120px, calc(100vw - 32px)); }
+    body.showcase-mode .preview-head { align-items: center; }
+    body.showcase-mode .empty { min-height: 360px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 760px); margin-top: 20px; }
       header { align-items: flex-start; flex-direction: column; }
+      .top-actions { justify-content: flex-start; }
       .grid { grid-template-columns: 1fr; }
+      .preview-head { flex-direction: column; }
+      .preview-actions { justify-content: flex-start; }
     }
   </style>
 </head>
@@ -71,15 +96,26 @@ export function renderOperatorConsolePage(): string {
   <main>
     <header>
       <div>
-        <h1>Agent Office</h1>
-        <p>Operator Console v0</p>
+        <div class="eyebrow">Agent Office</div>
+        <h1>Operator Console</h1>
+        <p>Command center for approval-gated Agent Office workflows.</p>
       </div>
-      <div class="status" id="globalStatus"></div>
+      <div class="top-actions">
+        <label class="showcase-toggle" for="showcaseMode">
+          <input id="showcaseMode" type="checkbox">
+          <span>Showcase</span>
+        </label>
+        <div class="status" id="globalStatus"></div>
+      </div>
     </header>
 
     <div class="grid">
       <section class="stack">
-        <div>
+        <div class="section-heading">
+          <h2>Workflow</h2>
+          <p>Choose a desk, load eligible tasks, and preview the next controlled action.</p>
+        </div>
+        <div class="field">
           <label for="deskMode">Desk</label>
           <select id="deskMode">
             <option value="architecture">Architecture Desk</option>
@@ -89,7 +125,7 @@ export function renderOperatorConsolePage(): string {
             <option value="postMergeCloseout">Post-Merge Closeout</option>
           </select>
         </div>
-        <div>
+        <div class="credential-panel">
           <label for="apiKey">API key</label>
           <input id="apiKey" type="password" autocomplete="off" placeholder="x-agent-office-api-key">
         </div>
@@ -113,12 +149,12 @@ export function renderOperatorConsolePage(): string {
       </section>
 
       <section class="stack">
-        <div class="row" style="justify-content: space-between; align-items: flex-start;">
+        <div class="preview-head">
           <div>
             <h2 id="selectedTaskTitle">Architect Brief Preview</h2>
             <p id="selectedTaskMeta">No task selected</p>
           </div>
-          <div class="row">
+          <div class="row preview-actions">
             <button id="previewButton" disabled>Preview</button>
             <button class="primary" id="approveButton" disabled>Approve writeback</button>
             <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
@@ -213,6 +249,7 @@ export function renderOperatorConsolePage(): string {
       reviewDeskResult: null,
       revisionNumber: 0,
       selectedTask: null,
+      showcaseMode: localStorage.getItem("agentOfficeShowcaseMode") === "true",
       tasks: []
     };
 
@@ -248,12 +285,14 @@ export function renderOperatorConsolePage(): string {
     const saveKeyButton = document.getElementById("saveKeyButton");
     const selectedTaskMeta = document.getElementById("selectedTaskMeta");
     const selectedTaskTitle = document.getElementById("selectedTaskTitle");
+    const showcaseMode = document.getElementById("showcaseMode");
     const taskList = document.getElementById("taskList");
     const taskStatus = document.getElementById("taskStatus");
 
     apiKeyInput.value = state.apiKey;
     deskMode.value = desks[state.mode] ? state.mode : "architecture";
     state.mode = deskMode.value;
+    setShowcaseMode(state.showcaseMode);
     resetSelection();
 
     function activeDesk() {
@@ -296,6 +335,18 @@ export function renderOperatorConsolePage(): string {
     function setStatus(element, message, type) {
       element.textContent = message;
       element.className = ("status " + (type || "")).trim();
+    }
+
+    function setShowcaseMode(enabled) {
+      state.showcaseMode = enabled;
+      document.body.classList.toggle("showcase-mode", enabled);
+      showcaseMode.checked = enabled;
+      localStorage.setItem("agentOfficeShowcaseMode", enabled ? "true" : "false");
+      if (enabled) {
+        setStatus(globalStatus, "Showcase view on.", "ok");
+      } else if (globalStatus.textContent === "Showcase view on.") {
+        setStatus(globalStatus, "");
+      }
     }
 
     function requireKey() {
@@ -614,6 +665,10 @@ export function renderOperatorConsolePage(): string {
       apiKeyInput.value = "";
       state.apiKey = "";
       setStatus(globalStatus, "Cleared.");
+    });
+
+    showcaseMode.addEventListener("change", function () {
+      setShowcaseMode(showcaseMode.checked);
     });
 
     loadTasksButton.addEventListener("click", async function () {
