@@ -9,37 +9,71 @@ export function renderOperatorConsolePage(): string {
     :root {
       color-scheme: light;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #eef2f5;
+      --bg: #eef1f4;
       --panel: #ffffff;
-      --panel-soft: #f8fafc;
-      --text: #182230;
-      --muted: #667085;
-      --border: #d0d7e2;
-      --accent: #0f766e;
-      --accent-strong: #0a5f57;
-      --ink: #101828;
+      --panel-soft: #f7f9fb;
+      --panel-strong: #111827;
+      --text: #1f2937;
+      --muted: #64748b;
+      --border: #d8dee8;
+      --border-strong: #bac3d0;
+      --accent: #2454d6;
+      --accent-soft: #e8eefc;
+      --accent-strong: #183fa5;
+      --emerald: #0f8a5f;
+      --emerald-soft: #e6f4ee;
+      --indigo: #4f46e5;
+      --ink: #0f172a;
       --danger: #b42318;
       --ok: #117044;
-      --shadow: 0 18px 44px rgba(24, 34, 48, 0.10);
-      --shadow-soft: 0 8px 24px rgba(24, 34, 48, 0.06);
+      --warn: #a15c07;
+      --shadow: 0 20px 60px rgba(15, 23, 42, 0.09);
+      --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.06);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 44%, #e8edf3 100%); color: var(--text); }
-    main { width: min(1240px, calc(100vw - 32px)); margin: 28px auto 56px; display: grid; gap: 18px; }
-    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 4px 2px 8px; }
-    h1 { margin: 0; font-size: 30px; line-height: 1.12; font-weight: 760; color: var(--ink); }
-    h2 { margin: 0 0 12px; font-size: 18px; line-height: 1.2; }
-    h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0; color: var(--muted); }
+    body { margin: 0; min-height: 100vh; background: #f4f6f8; color: var(--text); }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(238,241,244,0.92)); }
+    main { position: relative; width: min(1480px, calc(100vw - 28px)); margin: 18px auto 32px; }
+    h1 { margin: 0; font-size: 24px; line-height: 1.12; font-weight: 760; color: var(--ink); }
+    h2 { margin: 0; font-size: 17px; line-height: 1.2; color: var(--ink); }
+    h3 { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0; color: var(--muted); }
     p { margin: 0; color: var(--muted); line-height: 1.5; }
-    .eyebrow { margin-bottom: 5px; color: var(--accent-strong); font-size: 12px; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
-    .top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
-    .showcase-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0; border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; background: rgba(255, 255, 255, 0.82); box-shadow: var(--shadow-soft); color: var(--text); cursor: pointer; }
+    .app-shell { min-height: calc(100vh - 36px); display: grid; grid-template-columns: 270px minmax(0, 1fr) 340px; gap: 14px; align-items: stretch; }
+    .office-nav, .command-center, .case-file { background: rgba(255,255,255,0.94); border: 1px solid rgba(216,222,232,0.95); border-radius: 8px; box-shadow: var(--shadow); }
+    .office-nav { display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+    .office-identity { padding: 18px; border-bottom: 1px solid var(--border); background: #fbfcfe; }
+    .eyebrow { margin-bottom: 5px; color: var(--accent-strong); font-size: 11px; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
+    .office-identity p { margin-top: 7px; font-size: 13px; }
+    .nav-section { padding: 14px; display: grid; gap: 8px; align-content: start; }
+    .nav-label { font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 760; }
+    .desk-nav { display: grid; gap: 8px; }
+    .desk-item { width: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; padding: 10px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: none; }
+    .desk-item:hover { border-color: var(--border-strong); color: var(--ink); background: #f9fbfd; }
+    .desk-item.active { border-color: rgba(36,84,214,0.55); background: var(--accent-soft); }
+    .desk-index { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: #edf2f7; color: #475569; font-size: 12px; font-weight: 760; }
+    .desk-item.active .desk-index { background: var(--accent); color: #fff; }
+    .desk-name { display: block; color: var(--ink); font-size: 13px; font-weight: 720; }
+    .desk-duty { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.3; }
+    .nav-footer { padding: 14px; border-top: 1px solid var(--border); background: #fbfcfe; display: grid; gap: 10px; }
+    .command-center { display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+    .command-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--border); background: #fbfcfe; }
+    .command-title { display: grid; gap: 7px; }
+    .command-title p { font-size: 13px; }
+    .command-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .command-actions { display: grid; gap: 8px; align-content: start; justify-items: end; min-width: 250px; }
+    .signal-row { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+    .showcase-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0; border: 1px solid var(--border-strong); border-radius: 999px; padding: 7px 10px; background: #fff; box-shadow: var(--shadow-soft); color: var(--text); cursor: pointer; }
     .showcase-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
     .showcase-toggle span { font-size: 12px; font-weight: 760; }
-    .grid { display: grid; grid-template-columns: minmax(292px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
-    section, .panel { background: rgba(255, 255, 255, 0.94); border: 1px solid rgba(208, 215, 226, 0.92); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
-    section { backdrop-filter: blur(10px); }
-    .panel { background: var(--panel-soft); box-shadow: none; }
+    .lifecycle { display: grid; grid-template-columns: repeat(8, minmax(92px, 1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .life-step { min-height: 74px; padding: 10px; background: #fff; display: grid; align-content: center; gap: 5px; border: 0; border-radius: 0; box-shadow: none; color: var(--muted); cursor: default; }
+    .life-step span:first-child { font-size: 11px; font-weight: 760; color: inherit; }
+    .life-step span:last-child { font-size: 12px; color: var(--ink); font-weight: 650; }
+    .life-step.done { background: #f8fafc; color: var(--emerald); }
+    .life-step.active { background: #eef4ff; box-shadow: inset 0 -3px 0 var(--accent); color: var(--accent-strong); }
+    .workspace-body { padding: 16px 18px 18px; display: grid; gap: 14px; align-content: start; overflow: auto; }
+    .work-panel, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: none; padding: 14px; }
+    .panel { background: var(--panel-soft); }
     .section-heading { display: grid; gap: 4px; margin-bottom: 4px; }
     .section-heading h2 { margin: 0; color: var(--ink); }
     .field { display: grid; gap: 8px; }
@@ -47,7 +81,7 @@ export function renderOperatorConsolePage(): string {
     label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
     input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; font: inherit; color: var(--text); background: #fff; }
     textarea { min-height: 94px; resize: vertical; line-height: 1.45; }
-    input:focus, select:focus, textarea:focus { outline: 2px solid rgba(15, 118, 110, 0.18); border-color: var(--accent); }
+    input:focus, select:focus, textarea:focus { outline: 2px solid rgba(36, 84, 214, 0.16); border-color: var(--accent); }
     button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 6px; min-height: 38px; padding: 8px 12px; font: inherit; font-weight: 680; cursor: pointer; box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04); transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease; }
     button:hover { border-color: var(--accent); color: var(--accent-strong); }
     button:active { transform: translateY(1px); }
@@ -57,132 +91,221 @@ export function renderOperatorConsolePage(): string {
     button:disabled { opacity: 0.48; cursor: not-allowed; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .stack { display: grid; gap: 12px; }
-    .tasks { display: grid; gap: 8px; margin-top: 4px; }
+    .command-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+    .tasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 4px; }
     .task { width: 100%; text-align: left; display: grid; gap: 6px; padding: 12px; background: var(--panel-soft); }
     .task strong { font-size: 14px; color: var(--ink); }
     .meta { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
-    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: #fbfcfd; color: #475467; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: #fbfcfd; color: #475467; font-size: 12px; white-space: nowrap; }
+    .pill.ok { border-color: rgba(15,138,95,0.25); background: var(--emerald-soft); color: #0b6b4a; }
+    .pill.warn { border-color: rgba(161,92,7,0.28); background: #fff6e6; color: var(--warn); }
+    .pill.info { border-color: rgba(36,84,214,0.24); background: var(--accent-soft); color: var(--accent-strong); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .status { min-height: 22px; font-size: 13px; color: var(--muted); }
     .status.error { color: var(--danger); }
     .status.ok { color: var(--ok); }
-    .preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .preview-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
     .preview-actions { justify-content: flex-end; }
     .brief { display: grid; gap: 12px; }
     .brief-title { font-size: 22px; font-weight: 760; color: var(--ink); line-height: 1.2; }
     .brief p, .brief li { color: var(--text); line-height: 1.5; }
     .brief ul { margin: 6px 0 0; padding-left: 20px; }
-    .empty { min-height: 280px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; background: var(--panel-soft); }
+    .empty { min-height: 160px; display: grid; place-items: center; border: 1px dashed var(--border-strong); border-radius: 8px; color: var(--muted); text-align: center; padding: 18px; background: var(--panel-soft); }
     .proposal-pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); background: #f8fafc; border-radius: 6px; padding: 12px; max-height: 280px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .context-summary { border: 1px solid var(--border); border-radius: 6px; padding: 12px; background: #f8fafc; display: grid; gap: 7px; }
     .context-summary strong { font-size: 13px; }
     .context-summary .gaps { color: var(--muted); font-size: 12px; line-height: 1.45; }
-    .result { white-space: pre-wrap; overflow-wrap: anywhere; background: #0f172a; color: #e5edf7; border-radius: 8px; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 320px; overflow: auto; }
+    details.debug-details { border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+    details.debug-details summary { cursor: pointer; padding: 11px 12px; color: var(--muted); font-size: 13px; font-weight: 680; }
+    .result { white-space: pre-wrap; overflow-wrap: anywhere; background: #0f172a; color: #e5edf7; border-radius: 0 0 8px 8px; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 320px; overflow: auto; }
+    .case-file { display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+    .case-head { padding: 16px; border-bottom: 1px solid var(--border); background: #fbfcfe; display: grid; gap: 8px; }
+    .case-grid { padding: 14px; display: grid; gap: 10px; align-content: start; overflow: auto; }
+    .evidence-card { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 12px; display: grid; gap: 7px; }
+    .evidence-card strong { color: var(--ink); font-size: 13px; }
+    .evidence-value { color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .copy-button { min-height: 28px; padding: 4px 8px; font-size: 11px; justify-self: start; }
+    .audit-list { margin: 0; padding-left: 17px; color: var(--text); font-size: 12px; line-height: 1.5; }
+    .showcase-note { display: none; border: 1px solid rgba(36,84,214,0.24); background: #f4f7ff; color: var(--accent-strong); border-radius: 8px; padding: 10px; font-size: 12px; line-height: 1.45; }
     body.showcase-mode .credential-panel,
-    body.showcase-mode .result { display: none; }
-    body.showcase-mode main { width: min(1120px, calc(100vw - 32px)); }
-    body.showcase-mode .preview-head { align-items: center; }
-    body.showcase-mode .empty { min-height: 360px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
+    body.showcase-mode details.debug-details { display: none; }
+    body.showcase-mode .showcase-note { display: block; }
+    body.showcase-mode .empty { background: #fbfcfe; }
+    @media (max-width: 1180px) {
+      .app-shell { grid-template-columns: 230px minmax(0, 1fr); }
+      .case-file { grid-column: 1 / -1; }
+      .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 760px); margin-top: 20px; }
-      header { align-items: flex-start; flex-direction: column; }
-      .top-actions { justify-content: flex-start; }
-      .grid { grid-template-columns: 1fr; }
+      .app-shell { grid-template-columns: 1fr; }
+      .command-bar { grid-template-columns: 1fr; }
+      .command-actions { justify-items: start; }
+      .signal-row { justify-content: flex-start; }
+      .lifecycle { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+      .command-strip, .preview-head { grid-template-columns: 1fr; }
       .preview-head { flex-direction: column; }
       .preview-actions { justify-content: flex-start; }
+      .case-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <div class="eyebrow">Agent Office</div>
-        <h1>Operator Console</h1>
-        <p>Command center for approval-gated Agent Office workflows.</p>
-      </div>
-      <div class="top-actions">
-        <label class="showcase-toggle" for="showcaseMode">
-          <input id="showcaseMode" type="checkbox">
-          <span>Showcase</span>
-        </label>
-        <div class="status" id="globalStatus"></div>
-      </div>
-    </header>
-
-    <div class="grid">
-      <section class="stack">
-        <div class="section-heading">
-          <h2>Workflow</h2>
-          <p>Choose a desk, load eligible tasks, and preview the next controlled action.</p>
+    <div class="app-shell">
+      <aside class="office-nav" aria-label="Agent Office desks">
+        <div class="office-identity">
+          <div class="eyebrow">Agent Office</div>
+          <h1>Agent Operations Command Center</h1>
+          <p>Controlled AI software delivery with approvals, evidence, and review gates.</p>
         </div>
-        <div class="field">
-          <label for="deskMode">Desk</label>
-          <select id="deskMode">
-            <option value="architecture">Architecture Desk</option>
-            <option value="codexHandoff">Codex Handoff Desk</option>
-            <option value="implementationReady">Implementation Ready</option>
-            <option value="reviewDesk">Review + Iteration Desk</option>
-            <option value="postMergeCloseout">Post-Merge Closeout</option>
-          </select>
-        </div>
-        <div class="credential-panel">
-          <label for="apiKey">API key</label>
-          <input id="apiKey" type="password" autocomplete="off" placeholder="x-agent-office-api-key">
-        </div>
-        <div class="row">
-          <button class="primary" id="saveKeyButton">Use key</button>
-          <button id="loadTasksButton">Load tasks</button>
-          <button class="danger" id="clearButton">Clear</button>
-        </div>
-        <div class="status" id="taskStatus"></div>
-        <div class="tasks" id="taskList"></div>
-        <div class="panel stack" id="reviewDeskInputs" hidden>
-          <div>
-            <label for="reviewRepo">Review repo</label>
-            <input id="reviewRepo" autocomplete="off" placeholder="owner/name">
-          </div>
-          <div>
-            <label for="reviewPrNumber">PR number</label>
-            <input id="reviewPrNumber" inputmode="numeric" autocomplete="off" placeholder="20">
+        <div class="nav-section">
+          <div class="nav-label">Office desks</div>
+          <div class="desk-nav" id="deskNav">
+            <button class="desk-item" type="button" data-mode="architecture"><span class="desk-index">01</span><span><span class="desk-name">Architecture Desk</span><span class="desk-duty">Scope, constraints, system shape</span></span><span class="pill info" data-desk-count="architecture">0</span></button>
+            <button class="desk-item" type="button" data-mode="codexHandoff"><span class="desk-index">02</span><span><span class="desk-name">Codex Handoff</span><span class="desk-duty">Implementation brief and guardrails</span></span><span class="pill" data-desk-count="codexHandoff">0</span></button>
+            <button class="desk-item" type="button" data-mode="implementationReady"><span class="desk-index">03</span><span><span class="desk-name">Work-order PR</span><span class="desk-duty">Branch, work order, draft PR</span></span><span class="pill" data-desk-count="implementationReady">0</span></button>
+            <button class="desk-item" type="button" data-mode="implementationReady" data-dispatch="true"><span class="desk-index">04</span><span><span class="desk-name">Codex Dispatch</span><span class="desk-duty">Agent implementation branch</span></span><span class="pill warn">PR #22</span></button>
+            <button class="desk-item" type="button" data-mode="reviewDesk"><span class="desk-index">05</span><span><span class="desk-name">Review + Iteration</span><span class="desk-duty">Review verdict and fix brief</span></span><span class="pill" data-desk-count="reviewDesk">0</span></button>
+            <button class="desk-item" type="button" data-mode="postMergeCloseout"><span class="desk-index">06</span><span><span class="desk-name">Post-Merge Closeout</span><span class="desk-duty">Deployment and Notion audit</span></span><span class="pill" data-desk-count="postMergeCloseout">0</span></button>
           </div>
         </div>
-      </section>
-
-      <section class="stack">
-        <div class="preview-head">
-          <div>
-            <h2 id="selectedTaskTitle">Architect Brief Preview</h2>
-            <p id="selectedTaskMeta">No task selected</p>
+        <div class="nav-footer">
+          <div class="field">
+            <label for="deskMode">Desk selector</label>
+            <select id="deskMode">
+              <option value="architecture">Architecture Desk</option>
+              <option value="codexHandoff">Codex Handoff Desk</option>
+              <option value="implementationReady">Work-order PR</option>
+              <option value="reviewDesk">Review + Iteration Desk</option>
+              <option value="postMergeCloseout">Post-Merge Closeout</option>
+            </select>
           </div>
-          <div class="row preview-actions">
-            <button id="previewButton" disabled>Preview</button>
-            <button class="primary" id="approveButton" disabled>Approve writeback</button>
-            <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
-            <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
-            <button id="implementationPreviewButton" hidden disabled>Preview work order</button>
-            <button class="primary" id="implementationApproveButton" hidden disabled>Create work-order PR</button>
-            <button class="primary" id="closeoutCommitButton" hidden disabled>Commit closeout</button>
-          </div>
-        </div>
-        <div class="status" id="previewStatus"></div>
-        <div class="panel stack" id="revisionPanel" hidden>
-          <div>
-            <label for="revisionFeedback">Revision feedback</label>
-            <textarea id="revisionFeedback" placeholder="Tell the Architect Desk what to tighten, remove, clarify, or refocus before approval."></textarea>
+          <div class="credential-panel">
+            <label for="apiKey">API key</label>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="x-agent-office-api-key">
           </div>
           <div class="row">
-            <button id="reviseButton" disabled>Revise preview</button>
+            <button id="saveKeyButton">Use key</button>
+            <button class="danger" id="clearButton">Clear</button>
+          </div>
+          <div class="status" id="globalStatus"></div>
+        </div>
+      </aside>
+
+      <section class="command-center">
+        <div class="command-bar">
+          <div class="command-title">
+            <div class="eyebrow">AI Development Office</div>
+            <h1 id="commandTask">No active task</h1>
+            <p>Command center for approval-gated Agent Office workflows.</p>
+            <div class="command-meta">
+              <span class="pill info" id="commandStage">Architecture Desk</span>
+              <span class="pill mono" id="commandRepo">repo: pending</span>
+              <span class="pill" id="commandEnv">env: local operator</span>
+              <span class="pill warn" id="commandApi">api: key required</span>
+            </div>
+          </div>
+          <div class="command-actions">
+            <div class="signal-row">
+              <span class="pill ok" id="notionSignal">Notion tracked</span>
+              <span class="pill ok" id="githubSignal">GitHub evidence</span>
+              <span class="pill ok" id="vercelSignal">Vercel monitored</span>
+              <span class="pill info" id="codexSignal">Codex gated</span>
+            </div>
+            <label class="showcase-toggle" for="showcaseMode">
+              <input id="showcaseMode" type="checkbox">
+              <span>Showcase Mode</span>
+            </label>
           </div>
         </div>
-        <div class="brief" id="briefPreview"><div class="empty">Select a ready task.</div></div>
-        <div class="panel stack" id="approvalPanel" hidden>
-          <div class="meta">
-            <span class="pill" id="briefHash"></span>
-            <span class="pill" id="expiresAt"></span>
+
+        <div class="lifecycle" aria-label="AI development lifecycle">
+          <div class="life-step" data-stage="0"><span>Intake</span><span>Task captured</span></div>
+          <div class="life-step" data-stage="1"><span>Architecture</span><span>Brief preview</span></div>
+          <div class="life-step" data-stage="2"><span>Handoff</span><span>Codex packet</span></div>
+          <div class="life-step" data-stage="3"><span>Work-order PR</span><span>Branch created</span></div>
+          <div class="life-step" data-stage="4"><span>Codex Dispatch</span><span>Implementation</span></div>
+          <div class="life-step" data-stage="5"><span>Review</span><span>Desk verdict</span></div>
+          <div class="life-step" data-stage="6"><span>Merge</span><span>Human gate</span></div>
+          <div class="life-step" data-stage="7"><span>Closeout</span><span>Audit recorded</span></div>
+        </div>
+
+        <div class="workspace-body">
+          <div class="work-panel stack">
+            <div class="command-strip">
+              <div class="section-heading">
+                <h2>Desk Queue</h2>
+                <p id="deskBrief">Choose a desk, load eligible tasks, and preview the next controlled action.</p>
+              </div>
+              <div class="row">
+                <button id="loadTasksButton">Load tasks</button>
+              </div>
+            </div>
+            <div class="showcase-note">Showcase Mode is using sanitized demo evidence. Live write actions are disabled and API credentials are hidden.</div>
+            <div class="status" id="taskStatus"></div>
+            <div class="tasks" id="taskList"></div>
+            <div class="panel stack" id="reviewDeskInputs" hidden>
+              <div>
+                <label for="reviewRepo">Review repo</label>
+                <input id="reviewRepo" autocomplete="off" placeholder="owner/name">
+              </div>
+              <div>
+                <label for="reviewPrNumber">PR number</label>
+                <input id="reviewPrNumber" inputmode="numeric" autocomplete="off" placeholder="20">
+              </div>
+            </div>
+          </div>
+
+          <div class="work-panel stack">
+            <div class="preview-head">
+              <div>
+                <h2 id="selectedTaskTitle">Architect Brief Preview</h2>
+                <p id="selectedTaskMeta">No task selected</p>
+              </div>
+              <div class="row preview-actions">
+                <button id="previewButton" disabled>Preview</button>
+                <button class="primary" id="approveButton" disabled>Approve writeback</button>
+                <button id="githubPreviewButton" hidden disabled>Preview draft PR</button>
+                <button class="primary" id="githubApproveButton" hidden disabled>Create draft PR</button>
+                <button id="implementationPreviewButton" hidden disabled>Preview work order</button>
+                <button class="primary" id="implementationApproveButton" hidden disabled>Create work-order PR</button>
+                <button class="primary" id="closeoutCommitButton" hidden disabled>Commit closeout</button>
+              </div>
+            </div>
+            <div class="status" id="previewStatus"></div>
+            <div class="panel stack" id="revisionPanel" hidden>
+              <div>
+                <label for="revisionFeedback">Revision feedback</label>
+                <textarea id="revisionFeedback" placeholder="Tell the Architect Desk what to tighten, remove, clarify, or refocus before approval."></textarea>
+              </div>
+              <div class="row">
+                <button id="reviseButton" disabled>Revise preview</button>
+              </div>
+            </div>
+            <div class="brief" id="briefPreview"><div class="empty">Select a ready task.</div></div>
+            <div class="panel stack" id="approvalPanel" hidden>
+              <div class="meta">
+                <span class="pill" id="briefHash"></span>
+                <span class="pill" id="expiresAt"></span>
+              </div>
+            </div>
+            <details class="debug-details" id="debugDetails">
+              <summary>Raw run output</summary>
+              <div class="result" id="result"></div>
+            </details>
           </div>
         </div>
-        <div class="result" id="result" hidden></div>
       </section>
+
+      <aside class="case-file" aria-label="Evidence and case file">
+        <div class="case-head">
+          <div class="eyebrow">Evidence / Case File</div>
+          <h2>Auditable delivery context</h2>
+          <p>Notion, GitHub, Vercel, Codex, approval gates, and missing evidence stay visible.</p>
+        </div>
+        <div class="case-grid" id="caseFile"></div>
+      </aside>
     </div>
   </main>
 
@@ -263,9 +386,18 @@ export function renderOperatorConsolePage(): string {
     const approvalPanel = document.getElementById("approvalPanel");
     const briefHash = document.getElementById("briefHash");
     const briefPreview = document.getElementById("briefPreview");
+    const caseFile = document.getElementById("caseFile");
     const clearButton = document.getElementById("clearButton");
     const closeoutCommitButton = document.getElementById("closeoutCommitButton");
+    const commandApi = document.getElementById("commandApi");
+    const commandEnv = document.getElementById("commandEnv");
+    const commandRepo = document.getElementById("commandRepo");
+    const commandStage = document.getElementById("commandStage");
+    const commandTask = document.getElementById("commandTask");
+    const debugDetails = document.getElementById("debugDetails");
     const deskMode = document.getElementById("deskMode");
+    const deskBrief = document.getElementById("deskBrief");
+    const deskNavButtons = Array.from(document.querySelectorAll(".desk-item"));
     const expiresAt = document.getElementById("expiresAt");
     const githubApproveButton = document.getElementById("githubApproveButton");
     const githubPreviewButton = document.getElementById("githubPreviewButton");
@@ -288,12 +420,40 @@ export function renderOperatorConsolePage(): string {
     const showcaseMode = document.getElementById("showcaseMode");
     const taskList = document.getElementById("taskList");
     const taskStatus = document.getElementById("taskStatus");
+    const lifecycleSteps = Array.from(document.querySelectorAll(".life-step"));
+
+    const showcaseCase = {
+      approvalHash: "handoff:8f31c72a4b19",
+      auditTrail: [
+        "Notion task accepted into Architecture Desk.",
+        "Codex Handoff approved by human operator.",
+        "Work-order PR prepared with constrained implementation scope.",
+        "Review Desk marked follow-up as Needs Codex Fixes."
+      ],
+      branch: "codex/add-codex-dispatch-v0",
+      latestRunId: "run_20260604_1438_codex_dispatch",
+      missingEvidence: ["Production deploy approval not present", "Manual smoke-test notes required after Vercel preview"],
+      notionTask: "Add Codex Dispatch v0",
+      pr: "SherifHaidar/chief-of-staff-agent-office#22",
+      repo: "SherifHaidar/chief-of-staff-agent-office",
+      reviewVerdict: "Needs Codex Fixes",
+      stageIndex: 4,
+      vercelStatus: "Preview ready",
+      workOrderPath: ".agent-office/work-orders/add-codex-dispatch-v0.md"
+    };
+
+    const showcaseTask = {
+      name: showcaseCase.notionTask,
+      priority: "High",
+      status: "In Codex / Implementation Ready",
+      taskId: "notion-demo-add-codex-dispatch-v0"
+    };
 
     apiKeyInput.value = state.apiKey;
     deskMode.value = desks[state.mode] ? state.mode : "architecture";
     state.mode = deskMode.value;
-    setShowcaseMode(state.showcaseMode);
     resetSelection();
+    setShowcaseMode(state.showcaseMode);
 
     function activeDesk() {
       return desks[state.mode];
@@ -319,6 +479,61 @@ export function renderOperatorConsolePage(): string {
       return state.mode === "postMergeCloseout";
     }
 
+    function activeStageIndex() {
+      if (state.showcaseMode) {
+        return showcaseCase.stageIndex;
+      }
+      if (isArchitectureMode()) {
+        return state.artifact ? 1 : 0;
+      }
+      if (isCodexHandoffMode()) {
+        return state.githubProposal ? 3 : state.artifact ? 2 : 1;
+      }
+      if (isImplementationReadyMode()) {
+        return state.implementationProposal ? 4 : 3;
+      }
+      if (isReviewDeskMode()) {
+        return state.reviewDeskResult ? 5 : 4;
+      }
+      if (isPostMergeCloseoutMode()) {
+        return state.postMergeCloseoutPreview ? 7 : 6;
+      }
+      return 0;
+    }
+
+    function currentCaseData() {
+      if (state.showcaseMode) {
+        return showcaseCase;
+      }
+
+      const task = state.selectedTask;
+      const proposal = state.implementationProposal || state.githubProposal;
+      const closeout = state.postMergeCloseoutPreview;
+      const review = state.reviewDeskResult;
+      const closeoutPr = closeout && closeout.evidence ? closeout.evidence.pullRequest : null;
+      const reviewPr = review && review.evidence ? review.evidence.pullRequest : null;
+
+      return {
+        approvalHash: state.approval ? "approval ready" : "pending preview",
+        auditTrail: [
+          task ? "Task selected from " + activeDesk().workflowName + "." : "No task selected.",
+          state.artifact ? "Preview generated and waiting on approval boundary." : "Preview not generated.",
+          proposal ? "GitHub proposal available for review." : "GitHub proposal pending.",
+          review ? "Review Desk verdict returned." : "Review Desk verdict pending."
+        ],
+        branch: proposal ? proposal.branchName : "pending",
+        latestRunId: "pending",
+        missingEvidence: review && review.review ? review.review.missingEvidence : ["Select a task and generate a preview to populate evidence."],
+        notionTask: task ? task.name : "No active Notion task",
+        pr: closeoutPr ? closeoutPr.repository + "#" + closeoutPr.pullRequestNumber : reviewPr ? reviewPr.repository + "#" + reviewPr.pullRequestNumber : "pending",
+        repo: proposal ? proposal.repository : closeoutPr ? closeoutPr.repository : reviewPr ? reviewPr.repository : "pending",
+        reviewVerdict: review && review.review ? review.review.verdict : "Not reviewed",
+        stageIndex: activeStageIndex(),
+        vercelStatus: closeout && closeout.evidence && closeout.evidence.deployment ? closeout.evidence.deployment.status : "pending",
+        workOrderPath: state.implementationProposal ? state.implementationProposal.workOrderPath : "pending"
+      };
+    }
+
     function syncControlsForMode() {
       previewButton.hidden = isImplementationReadyMode();
       approveButton.hidden = isImplementationReadyMode() || isReviewDeskMode() || isPostMergeCloseoutMode();
@@ -330,11 +545,89 @@ export function renderOperatorConsolePage(): string {
       reviewDeskInputs.hidden = !(isReviewDeskMode() || isPostMergeCloseoutMode());
       reviewRepo.previousElementSibling.textContent = isPostMergeCloseoutMode() ? "Closeout repo" : "Review repo";
       previewButton.textContent = activeDesk().previewButtonLabel;
+      approveButton.disabled = approveButton.disabled || state.showcaseMode;
+      githubApproveButton.disabled = githubApproveButton.disabled || state.showcaseMode;
+      implementationApproveButton.disabled = implementationApproveButton.disabled || state.showcaseMode;
+      closeoutCommitButton.disabled = closeoutCommitButton.disabled || state.showcaseMode;
+      updateCommandCenter();
     }
 
     function setStatus(element, message, type) {
       element.textContent = message;
       element.className = ("status " + (type || "")).trim();
+    }
+
+    function updateCommandCenter() {
+      const desk = activeDesk();
+      const caseData = currentCaseData();
+      const activeStage = activeStageIndex();
+
+      commandTask.textContent = state.selectedTask ? state.selectedTask.name : state.showcaseMode ? showcaseCase.notionTask : "No active task";
+      commandStage.textContent = desk.workflowName;
+      commandRepo.textContent = "repo: " + caseData.repo;
+      commandEnv.textContent = state.showcaseMode ? "env: sanitized preview" : "env: local operator";
+      commandApi.textContent = state.showcaseMode ? "api: hidden" : state.apiKey || apiKeyInput.value.trim() ? "api: ready" : "api: key required";
+      commandApi.className = "pill " + (state.showcaseMode || state.apiKey || apiKeyInput.value.trim() ? "ok" : "warn");
+      deskBrief.textContent = desk.readyLabel + " queue. " + (state.showcaseMode ? "Demo evidence is loaded for portfolio review." : "Load eligible tasks, inspect evidence, then run the next gated preview.");
+
+      deskNavButtons.forEach(function (button) {
+        const isDispatch = button.dataset.dispatch === "true";
+        const isWorkOrderBeforeDispatch = state.mode === "implementationReady" && activeStage >= 4 && !isDispatch;
+        const isActive = button.dataset.mode === state.mode && !isWorkOrderBeforeDispatch && (!isDispatch || activeStage >= 4);
+        button.classList.toggle("active", isActive);
+      });
+
+      lifecycleSteps.forEach(function (step) {
+        const index = Number(step.dataset.stage || "0");
+        step.classList.toggle("done", index < activeStage);
+        step.classList.toggle("active", index === activeStage);
+      });
+
+      document.querySelectorAll("[data-desk-count]").forEach(function (element) {
+        const mode = element.getAttribute("data-desk-count");
+        const count = state.showcaseMode && mode === state.mode ? 1 : mode === state.mode ? state.tasks.length : 0;
+        element.textContent = String(count);
+        element.className = "pill " + (count > 0 ? "info" : "");
+      });
+
+      renderCaseFile();
+    }
+
+    function renderCaseFile() {
+      const data = currentCaseData();
+      const cards = [
+        ["Notion task", data.notionTask, "Notion evidence is the source of task state."],
+        ["GitHub PR", data.pr, "Pull request evidence and review context."],
+        ["Repository", data.repo, "Target repo for this controlled workflow."],
+        ["Branch", data.branch, "Implementation or work-order branch."],
+        ["Work-order path", data.workOrderPath, "Auditable instruction file for Codex."],
+        ["Vercel status", data.vercelStatus, "Deployment or preview signal."],
+        ["Latest run ID", data.latestRunId, "Traceable Agent Office execution."],
+        ["Review Desk verdict", data.reviewVerdict, "Independent review and iteration state."],
+        ["Approval hash", data.approvalHash, "Preview token evidence without exposing secrets."]
+      ];
+
+      caseFile.innerHTML = cards.map(function (card) {
+        const value = card[1] || "pending";
+        return '<div class="evidence-card"><strong>' + escapeHtml(card[0]) + '</strong><div class="evidence-value mono">' + escapeHtml(value) + '</div><p>' + escapeHtml(card[2]) + '</p><button class="copy-button" type="button" data-copy="' + escapeHtml(value) + '">Copy</button></div>';
+      }).join("") +
+        '<div class="evidence-card"><strong>Missing evidence / risks</strong><ul class="audit-list">' + (data.missingEvidence || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join("") + '</ul></div>' +
+        '<div class="evidence-card"><strong>Audit trail</strong><ul class="audit-list">' + (data.auditTrail || []).map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join("") + '</ul></div>';
+
+      caseFile.querySelectorAll("[data-copy]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          copyText(button.getAttribute("data-copy") || "");
+        });
+      });
+    }
+
+    function copyText(value) {
+      if (!value || value === "pending") {
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).catch(function () {});
+      }
     }
 
     function setShowcaseMode(enabled) {
@@ -343,10 +636,66 @@ export function renderOperatorConsolePage(): string {
       showcaseMode.checked = enabled;
       localStorage.setItem("agentOfficeShowcaseMode", enabled ? "true" : "false");
       if (enabled) {
-        setStatus(globalStatus, "Showcase view on.", "ok");
+        apiKeyInput.value = "";
+        state.apiKey = "";
+        state.mode = "implementationReady";
+        deskMode.value = state.mode;
+        state.tasks = [showcaseTask];
+        state.selectedTask = showcaseTask;
+        state.implementationProposal = {
+          baseBranch: "main",
+          baseCommitSha: "d5b7d0226e7b970086a7a9059c785affa719e687",
+          branchName: showcaseCase.branch,
+          handoffSummary: {
+            acceptanceChecklist: ["Codex Dispatch accepts an approved work-order", "Operator can inspect prompt before dispatch", "Review Desk can request fixes without merge authority"],
+            constraints: ["Do not change approval-token logic", "Do not merge or deploy automatically", "Keep GitHub, Notion, and Vercel integrations permissioned"],
+            implementationScope: ["Add dispatch preparation surface", "Preserve human approval gates", "Record auditable evidence"],
+            implementationSteps: ["Prepare dispatch prompt", "Attach work-order evidence", "Route to Review Desk after implementation"],
+            likelyAffectedFiles: ["src/server/operator-console-page.ts", "tests/server/app.test.ts"],
+            problemSummary: "Move approved work orders into a controlled Codex implementation lane.",
+            productIntent: "Make agent work observable, gated, and reviewable.",
+            testsToRun: ["npm run typecheck", "npm test"]
+          },
+          nextAction: "Dispatch Codex on the work-order branch after human approval.",
+          prBody: "Portfolio demo state. No live GitHub write is performed in Showcase Mode.",
+          prTitle: "Add Codex Dispatch v0",
+          repository: showcaseCase.repo,
+          workOrderContent: "Controlled work order for Codex Dispatch v0.",
+          workOrderPath: showcaseCase.workOrderPath
+        };
+        state.reviewDeskResult = {
+          evidence: { pullRequest: { pullRequestNumber: 22, repository: showcaseCase.repo } },
+          finalApprovalWarning: "Review can request Codex fixes, but cannot merge or deploy.",
+          review: {
+            acceptanceChecklist: [
+              { criterion: "Approval gate preserved", notes: "Dispatch is disabled without a human-approved work order.", status: "Pass" },
+              { criterion: "Evidence attached", notes: "Repo, branch, PR, run ID, and Vercel preview are visible.", status: "Pass" },
+              { criterion: "Smoke notes", notes: "Manual verification notes are still missing.", status: "Needs follow-up" }
+            ],
+            codexFixBrief: { instructions: ["Tighten empty-state copy", "Add final smoke-test evidence"], summary: "Small follow-up before closeout.", verification: ["Rerun typecheck", "Rerun tests"] },
+            missingEvidence: showcaseCase.missingEvidence,
+            risks: ["Operator may confuse preview with write action unless the boundary stays visible."],
+            suggestedSmokeTests: ["Open /office with Showcase Mode", "Verify write actions remain disabled", "Confirm evidence panel contains sanitized identifiers"],
+            summary: "Codex Dispatch is directionally correct and auditable; final smoke evidence is still required.",
+            verdict: showcaseCase.reviewVerdict
+          }
+        };
+        syncControlsForMode();
+        renderTasks();
+        selectTask(showcaseTask);
+        renderImplementationProposal(state.implementationProposal);
+        implementationApproveButton.disabled = true;
+        setStatus(globalStatus, "Showcase Mode on. Live writes disabled.", "ok");
+        setStatus(taskStatus, "Demo queue loaded with sanitized evidence.", "ok");
+        setStatus(previewStatus, "Demo work order ready. Write actions are disabled.", "ok");
       } else if (globalStatus.textContent === "Showcase view on.") {
         setStatus(globalStatus, "");
       }
+      if (!enabled && globalStatus.textContent === "Showcase Mode on. Live writes disabled.") {
+        setStatus(globalStatus, "");
+      }
+      updateCommandCenter();
+      renderCaseFile();
     }
 
     function requireKey() {
@@ -403,14 +752,18 @@ export function renderOperatorConsolePage(): string {
       reviseButton.disabled = true;
       taskList.innerHTML = "";
       briefPreview.innerHTML = '<div class="empty">Select a ' + escapeHtml(desk.readyLabel) + ' task.</div>';
+      debugDetails.hidden = true;
+      result.textContent = "";
       setStatus(previewStatus, "");
       setStatus(taskStatus, "");
+      updateCommandCenter();
     }
 
     function renderTasks() {
       taskList.innerHTML = "";
       if (state.tasks.length === 0) {
         taskList.innerHTML = '<div class="empty">No ready tasks.</div>';
+        updateCommandCenter();
         return;
       }
 
@@ -422,21 +775,24 @@ export function renderOperatorConsolePage(): string {
         button.addEventListener("click", function () { selectTask(task); });
         taskList.appendChild(button);
       });
+      updateCommandCenter();
     }
 
     function selectTask(task) {
       state.selectedTask = task;
-      state.approval = null;
-      state.artifact = null;
-      state.codexHandoffApprovalToken = null;
-      state.githubApproval = null;
-      state.githubProposal = null;
-      state.implementationApproval = null;
-      state.implementationProposal = null;
-      state.postMergeCloseoutPreview = null;
-      state.productContext = null;
-      state.reviewDeskResult = null;
-      state.revisionNumber = 0;
+      if (!state.showcaseMode) {
+        state.approval = null;
+        state.artifact = null;
+        state.codexHandoffApprovalToken = null;
+        state.githubApproval = null;
+        state.githubProposal = null;
+        state.implementationApproval = null;
+        state.implementationProposal = null;
+        state.postMergeCloseoutPreview = null;
+        state.productContext = null;
+        state.reviewDeskResult = null;
+        state.revisionNumber = 0;
+      }
       selectedTaskTitle.textContent = task.name;
       selectedTaskMeta.textContent = task.status + " / " + task.taskId;
       syncControlsForMode();
@@ -452,8 +808,11 @@ export function renderOperatorConsolePage(): string {
       revisionPanel.hidden = true;
       reviseButton.disabled = true;
       result.hidden = true;
+      debugDetails.hidden = true;
+      result.textContent = "";
       briefPreview.innerHTML = '<div class="empty">Preview not generated.</div>';
       setStatus(previewStatus, "");
+      updateCommandCenter();
     }
 
     function renderArtifact(artifact) {
@@ -490,6 +849,7 @@ export function renderOperatorConsolePage(): string {
       briefPreview.innerHTML = contextSummary + '<div class="brief-title">' + escapeHtml(brief.briefTitle) + '</div><p>' + escapeHtml(brief.executiveSummary) + '</p>' + sections.map(function (section) {
         return renderList(section[0], section[1]);
       }).join("");
+      updateCommandCenter();
     }
 
     function renderCodexHandoff(handoff) {
@@ -514,6 +874,7 @@ export function renderOperatorConsolePage(): string {
         sections.map(function (section) { return renderList(section[0], section[1]); }).join(""),
         '<h3>Suggested PR Body</h3><p>' + escapeHtml(handoff.suggestedPrBody) + '</p>'
       ].join("");
+      updateCommandCenter();
     }
 
     function renderReviewDeskResult(result) {
@@ -531,6 +892,7 @@ export function renderOperatorConsolePage(): string {
         renderList('Suggested Smoke Tests', review.suggestedSmokeTests),
         review.verdict === 'Needs Codex Fixes' && review.codexFixBrief ? '<h3>Draft Codex Fix Brief</h3><p>' + escapeHtml(review.codexFixBrief.summary) + '</p>' + renderList('Fix Instructions', review.codexFixBrief.instructions) + renderList('Verification', review.codexFixBrief.verification) : ''
       ].join("");
+      updateCommandCenter();
     }
 
     function renderPostMergeCloseoutResult(closeout) {
@@ -562,6 +924,7 @@ export function renderOperatorConsolePage(): string {
         '<h3>Closeout Block Preview</h3><pre class="proposal-pre">' + escapeHtml(plan.blockPreview) + '</pre>',
         '<h3>Approval Boundary</h3><p>Post-Merge Closeout records an already-merged PR. It does not merge, deploy, approve production, or dispatch Codex fixes.</p>'
       ].join("");
+      updateCommandCenter();
     }
 
     function renderContextSummary(productContext) {
@@ -587,15 +950,17 @@ export function renderOperatorConsolePage(): string {
     function renderGitHubProposal(proposal) {
       briefPreview.innerHTML = [
         '<div class="brief-title">' + escapeHtml(proposal.prTitle) + '</div>',
+        '<p><strong>Controlled action:</strong> prepare a draft PR proposal from an approved Codex Handoff. Human approval is required before GitHub writes.</p>',
         '<p><strong>Repository:</strong> ' + escapeHtml(proposal.repository) + '</p>',
         '<p><strong>Base:</strong> ' + escapeHtml(proposal.baseBranch) + ' @ ' + escapeHtml(proposal.baseCommitSha) + '</p>',
         '<p><strong>Branch:</strong> ' + escapeHtml(proposal.branchName) + '</p>',
         '<p><strong>File:</strong> ' + escapeHtml(proposal.handoffFilePath) + '</p>',
         '<p><strong>Commit:</strong> ' + escapeHtml(proposal.commitMessage) + '</p>',
-        '<h3>Draft PR Body</h3><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre>',
-        '<h3>Handoff File Content</h3><pre class="proposal-pre">' + escapeHtml(proposal.handoffFileContent) + '</pre>',
+        '<details><summary>Draft PR body</summary><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre></details>',
+        '<details><summary>Handoff file content</summary><pre class="proposal-pre">' + escapeHtml(proposal.handoffFileContent) + '</pre></details>',
         '<h3>Approval Boundary</h3><p>Draft only. This will not merge, deploy, push to main, or change repo settings/secrets.</p>'
       ].join("");
+      updateCommandCenter();
     }
 
     function renderImplementationProposal(proposal) {
@@ -616,10 +981,11 @@ export function renderOperatorConsolePage(): string {
         renderList('Implementation Steps', proposal.handoffSummary.implementationSteps),
         renderList('Tests To Run', proposal.handoffSummary.testsToRun),
         renderList('Acceptance Checklist', proposal.handoffSummary.acceptanceChecklist),
-        '<h3>PR Body</h3><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre>',
-        '<h3>Work Order Content</h3><pre class="proposal-pre">' + escapeHtml(proposal.workOrderContent) + '</pre>',
+        '<details><summary>PR body</summary><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre></details>',
+        '<details><summary>Work order content</summary><pre class="proposal-pre">' + escapeHtml(proposal.workOrderContent) + '</pre></details>',
         '<h3>Approval Boundary</h3><p>Draft only. Agent Office will commit only this work-order file. Product implementation must happen later on the created branch; this will not merge, deploy, push to main, or change repo settings/secrets.</p>'
       ].join("");
+      updateCommandCenter();
     }
 
     function renderList(title, items) {
@@ -632,8 +998,16 @@ export function renderOperatorConsolePage(): string {
     }
 
     function showResult(payload) {
+      if (state.showcaseMode) {
+        debugDetails.hidden = true;
+        result.textContent = "";
+        return;
+      }
+      debugDetails.hidden = false;
+      debugDetails.open = false;
       result.hidden = false;
       result.textContent = JSON.stringify(payload, null, 2);
+      updateCommandCenter();
     }
 
     function escapeHtml(value) {
@@ -648,6 +1022,10 @@ export function renderOperatorConsolePage(): string {
     deskMode.addEventListener("change", function () {
       state.mode = deskMode.value;
       sessionStorage.setItem("agentOfficeDeskMode", state.mode);
+      if (state.showcaseMode) {
+        setShowcaseMode(true);
+        return;
+      }
       resetSelection();
     });
 
@@ -673,6 +1051,16 @@ export function renderOperatorConsolePage(): string {
 
     loadTasksButton.addEventListener("click", async function () {
       const desk = activeDesk();
+      if (state.showcaseMode) {
+        state.tasks = [showcaseTask];
+        renderTasks();
+        selectTask(showcaseTask);
+        renderImplementationProposal(state.implementationProposal);
+        implementationApproveButton.disabled = true;
+        setStatus(taskStatus, "Demo queue loaded with sanitized evidence.", "ok");
+        setStatus(previewStatus, "Demo work order ready. Write actions are disabled.", "ok");
+        return;
+      }
       try {
         setStatus(taskStatus, "Loading " + desk.readyLabel + " tasks...");
         const payload = await agentFetch(desk.taskEndpoint);
@@ -690,6 +1078,12 @@ export function renderOperatorConsolePage(): string {
       }
 
       const desk = activeDesk();
+      if (state.showcaseMode) {
+        renderImplementationProposal(state.implementationProposal);
+        implementationApproveButton.disabled = true;
+        setStatus(previewStatus, "Demo work order ready. Write actions are disabled.", "ok");
+        return;
+      }
       try {
         previewButton.disabled = true;
         approveButton.disabled = true;
@@ -785,6 +1179,10 @@ export function renderOperatorConsolePage(): string {
       if (!state.selectedTask || !state.approval || !isArchitectureMode()) {
         return;
       }
+      if (state.showcaseMode) {
+        setStatus(previewStatus, "Showcase Mode disables live revision writes.", "ok");
+        return;
+      }
 
       const feedback = revisionFeedback.value.trim();
       if (!feedback) {
@@ -829,6 +1227,10 @@ export function renderOperatorConsolePage(): string {
       if (!state.approval) {
         return;
       }
+      if (state.showcaseMode) {
+        setStatus(previewStatus, "Showcase Mode disables live writeback.", "ok");
+        return;
+      }
 
       const desk = activeDesk();
       try {
@@ -852,6 +1254,10 @@ export function renderOperatorConsolePage(): string {
 
     closeoutCommitButton.addEventListener("click", async function () {
       if (!state.selectedTask || !state.postMergeCloseoutPreview) {
+        return;
+      }
+      if (state.showcaseMode) {
+        setStatus(previewStatus, "Showcase Mode disables live closeout commits.", "ok");
         return;
       }
 
@@ -910,6 +1316,10 @@ export function renderOperatorConsolePage(): string {
       if (!state.githubApproval) {
         return;
       }
+      if (state.showcaseMode) {
+        setStatus(previewStatus, "Showcase Mode disables live GitHub writes.", "ok");
+        return;
+      }
 
       try {
         githubApproveButton.disabled = true;
@@ -929,6 +1339,12 @@ export function renderOperatorConsolePage(): string {
 
     implementationPreviewButton.addEventListener("click", async function () {
       if (!state.selectedTask) {
+        return;
+      }
+      if (state.showcaseMode) {
+        renderImplementationProposal(state.implementationProposal);
+        implementationApproveButton.disabled = true;
+        setStatus(previewStatus, "Demo work order ready. Write actions are disabled.", "ok");
         return;
       }
 
@@ -962,6 +1378,10 @@ export function renderOperatorConsolePage(): string {
 
     implementationApproveButton.addEventListener("click", async function () {
       if (!state.implementationApproval) {
+        return;
+      }
+      if (state.showcaseMode) {
+        setStatus(previewStatus, "Showcase Mode disables live work-order PR creation.", "ok");
         return;
       }
 
