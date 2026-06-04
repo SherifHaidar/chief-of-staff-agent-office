@@ -10,6 +10,18 @@
       "destination": "/api/office"
     },
     {
+      "source": "/office-v2",
+      "destination": "/api/office-v2"
+    },
+    {
+      "source": "/office-v2/connections",
+      "destination": "/api/office-v2/connections"
+    },
+    {
+      "source": "/office-v2/console",
+      "destination": "/api/office-v2/console"
+    },
+    {
       "source": "/agent-office/tasks/ready-for-architecture",
       "destination": "/api/agent-office/tasks/ready-for-architecture"
     },

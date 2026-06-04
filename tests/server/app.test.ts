@@ -131,6 +131,39 @@ describe("Agent Office API", () => {
     await app.close();
   });
 
+  it("serves the isolated Office v2 mission control route without an API key", async () => {
+    const app = createTestApp();
+
+    const response = await app.inject({ method: "GET", url: "/office-v2" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.body).toContain("Agent Office Mission Control");
+    expect(response.body).toContain("Mission Control");
+    expect(response.body).toContain("Human Decision");
+    expect(response.body).toContain("Safe Next Action");
+    expect(response.body).toContain("Evidence / Confidence");
+    expect(response.body).not.toContain("Agent Operations Command Center");
+
+    await app.close();
+  });
+
+  it("serves Office v2 secondary connection and console routes", async () => {
+    const app = createTestApp();
+
+    const connections = await app.inject({ method: "GET", url: "/office-v2/connections" });
+    const console = await app.inject({ method: "GET", url: "/office-v2/console" });
+
+    expect(connections.statusCode).toBe(200);
+    expect(connections.body).toContain("Connection Center");
+    expect(connections.body).toContain("API keys stay off the main mission page.");
+    expect(console.statusCode).toBe(200);
+    expect(console.body).toContain("Advanced Console");
+    expect(console.body).toContain("Debug output is secondary by design.");
+
+    await app.close();
+  });
+
   it("rejects ready task requests without an API key", async () => {
     const scanner = createScanner();
     const app = createTestApp({ scanner });

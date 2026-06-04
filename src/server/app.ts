@@ -58,6 +58,7 @@ import type {
 import type { PostMergeCloseoutWorkflowResult } from "../workflows/post-merge-closeout.workflow.js";
 import type { ReviewDeskWorkflowResult } from "../workflows/review-desk.workflow.js";
 import type { WorkflowResult } from "../workflows/workflow-result.js";
+import { renderOfficeV2Page } from "./office-v2-page.js";
 import { renderOperatorConsolePage } from "./operator-console-page.js";
 
 const API_KEY_HEADER = "x-agent-office-api-key";
@@ -483,6 +484,13 @@ export function createAgentOfficeApp(options: AgentOfficeAppOptions): FastifyIns
   }));
 
   app.get("/office", async (_request, reply) => reply.type("text/html; charset=utf-8").send(renderOperatorConsolePage()));
+  app.get("/office-v2", async (_request, reply) => reply.type("text/html; charset=utf-8").send(renderOfficeV2Page()));
+  app.get("/office-v2/connections", async (_request, reply) =>
+    reply.type("text/html; charset=utf-8").send(renderOfficeV2Page("connections")),
+  );
+  app.get("/office-v2/console", async (_request, reply) =>
+    reply.type("text/html; charset=utf-8").send(renderOfficeV2Page("console")),
+  );
 
   app.get("/agent-office/tasks/ready-for-architecture", async () => {
     const tasks = await options.readyArchitectureScanner.findReadyForArchitectureTasks();
