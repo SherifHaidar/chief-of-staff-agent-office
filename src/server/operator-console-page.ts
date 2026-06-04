@@ -127,14 +127,65 @@ export function renderOperatorConsolePage(): string {
     .copy-button { min-height: 28px; padding: 4px 8px; font-size: 11px; justify-self: start; }
     .audit-list { margin: 0; padding-left: 17px; color: var(--text); font-size: 12px; line-height: 1.5; }
     .showcase-note { display: none; border: 1px solid rgba(36,84,214,0.24); background: #f4f7ff; color: var(--accent-strong); border-radius: 8px; padding: 10px; font-size: 12px; line-height: 1.45; }
+    .showcase-hero { display: none; padding: 22px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%); }
+    .showcase-hero-inner { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: end; }
+    .showcase-kicker { color: var(--accent-strong); font-size: 12px; font-weight: 780; text-transform: uppercase; }
+    .showcase-title { margin-top: 7px; color: var(--ink); font-size: 36px; line-height: 1.04; font-weight: 780; }
+    .showcase-copy { margin-top: 11px; max-width: 760px; color: #475569; font-size: 15px; line-height: 1.55; }
+    .showcase-case-card { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 14px; box-shadow: var(--shadow-soft); display: grid; gap: 10px; }
+    .showcase-case-card strong { color: var(--ink); font-size: 15px; }
+    .showcase-proof-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+    .proof-card { border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.84); padding: 12px; display: grid; gap: 5px; }
+    .proof-card span { color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 760; }
+    .proof-card strong { color: var(--ink); font-size: 14px; }
+    .showcase-study { display: grid; gap: 14px; }
+    .study-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; }
+    .study-title { font-size: 26px; line-height: 1.12; font-weight: 780; color: var(--ink); }
+    .study-summary { color: #475569; font-size: 14px; line-height: 1.55; max-width: 760px; }
+    .study-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .study-card { border: 1px solid var(--border); border-radius: 8px; background: #fbfcfe; padding: 12px; display: grid; gap: 6px; }
+    .study-card span { color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 760; }
+    .study-card strong { color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
+    .case-timeline { display: grid; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+    .timeline-row { display: grid; grid-template-columns: 145px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-top: 1px solid var(--border); }
+    .timeline-row:first-child { border-top: 0; }
+    .timeline-row span { color: var(--muted); font-size: 12px; font-weight: 720; }
+    .timeline-row strong { color: var(--ink); font-size: 13px; }
     body.showcase-mode .credential-panel,
     body.showcase-mode details.debug-details { display: none; }
     body.showcase-mode .showcase-note { display: block; }
     body.showcase-mode .empty { background: #fbfcfe; }
+    body.showcase-mode main { width: min(1520px, calc(100vw - 28px)); }
+    body.showcase-mode .app-shell { grid-template-columns: 246px minmax(0, 1fr) 360px; }
+    body.showcase-mode .office-identity { padding: 20px; background: #fff; }
+    body.showcase-mode .office-identity h1 { font-size: 20px; }
+    body.showcase-mode .nav-footer,
+    body.showcase-mode #deskQueuePanel,
+    body.showcase-mode #commandApi { display: none; }
+    body.showcase-mode .command-center { grid-template-rows: auto auto auto minmax(0, 1fr); }
+    body.showcase-mode .command-bar { padding: 14px 20px; background: #fff; }
+    body.showcase-mode .command-title p { display: none; }
+    body.showcase-mode .command-actions { min-width: 180px; }
+    body.showcase-mode .showcase-hero { display: block; }
+    body.showcase-mode .lifecycle { background: #eef2f7; padding: 12px 18px; gap: 8px; border-bottom: 1px solid var(--border); }
+    body.showcase-mode .life-step { min-height: 66px; border: 1px solid var(--border); border-radius: 8px; }
+    body.showcase-mode .life-step.done { background: #f6fbf8; border-color: rgba(15,138,95,0.2); }
+    body.showcase-mode .life-step.active { background: #eef4ff; border-color: rgba(36,84,214,0.36); box-shadow: inset 0 -3px 0 var(--accent); }
+    body.showcase-mode .workspace-body { padding: 18px 20px 22px; }
+    body.showcase-mode .work-panel { padding: 18px; border-color: rgba(186,195,208,0.85); box-shadow: var(--shadow-soft); }
+    body.showcase-mode .preview-head,
+    body.showcase-mode .approvalPanel { border-bottom-color: transparent; }
+    body.showcase-mode .case-head { background: #fff; }
+    body.showcase-mode .case-grid { gap: 12px; padding: 16px; }
+    body.showcase-mode .evidence-card { padding: 14px; }
+    body.showcase-mode .case-file .study-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     @media (max-width: 1180px) {
       .app-shell { grid-template-columns: 230px minmax(0, 1fr); }
+      body.showcase-mode .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
       .case-file { grid-column: 1 / -1; }
       .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .showcase-hero-inner { grid-template-columns: 1fr; }
+      .showcase-proof-grid, .study-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 760px); margin-top: 20px; }
@@ -147,6 +198,8 @@ export function renderOperatorConsolePage(): string {
       .preview-head { flex-direction: column; }
       .preview-actions { justify-content: flex-start; }
       .case-grid { grid-template-columns: 1fr; }
+      .showcase-proof-grid, .study-grid { grid-template-columns: 1fr; }
+      .timeline-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -220,6 +273,31 @@ export function renderOperatorConsolePage(): string {
           </div>
         </div>
 
+        <div class="showcase-hero" aria-label="Showcase overview">
+          <div class="showcase-hero-inner">
+            <div>
+              <div class="showcase-kicker">Agent Office</div>
+              <div class="showcase-title">Approval-gated AI delivery system</div>
+              <p class="showcase-copy">A controlled workflow for turning product ideas into scoped briefs, Codex handoffs, draft PRs, review packets, and closeout records.</p>
+            </div>
+            <div class="showcase-case-card">
+              <span class="pill info">Work-order PR ready</span>
+              <strong>Codex Dispatch v0 - controlled implementation packet</strong>
+              <div class="meta">
+                <span class="pill mono">chief-of-staff-agent-office</span>
+                <span class="pill mono">PR #22</span>
+              </div>
+              <span class="pill warn">Human approval required</span>
+            </div>
+          </div>
+          <div class="showcase-proof-grid">
+            <div class="proof-card"><span>Notion</span><strong>Task tracked</strong></div>
+            <div class="proof-card"><span>GitHub</span><strong>Draft PR linked</strong></div>
+            <div class="proof-card"><span>Vercel</span><strong>Preview ready</strong></div>
+            <div class="proof-card"><span>Review</span><strong>Human gate visible</strong></div>
+          </div>
+        </div>
+
         <div class="lifecycle" aria-label="AI development lifecycle">
           <div class="life-step" data-stage="0"><span>Intake</span><span>Task captured</span></div>
           <div class="life-step" data-stage="1"><span>Architecture</span><span>Brief preview</span></div>
@@ -232,7 +310,7 @@ export function renderOperatorConsolePage(): string {
         </div>
 
         <div class="workspace-body">
-          <div class="work-panel stack">
+          <div class="work-panel stack" id="deskQueuePanel">
             <div class="command-strip">
               <div class="section-heading">
                 <h2>Desk Queue</h2>
@@ -425,18 +503,19 @@ export function renderOperatorConsolePage(): string {
     const showcaseCase = {
       approvalHash: "handoff:8f31c72a4b19",
       auditTrail: [
-        "Notion task accepted into Architecture Desk.",
-        "Codex Handoff approved by human operator.",
-        "Work-order PR prepared with constrained implementation scope.",
-        "Review Desk marked follow-up as Needs Codex Fixes."
+        "Task captured.",
+        "Architecture approved.",
+        "Handoff generated.",
+        "Work-order PR created.",
+        "Dispatch packet ready."
       ],
       branch: "codex/add-codex-dispatch-v0",
       latestRunId: "run_20260604_1438_codex_dispatch",
-      missingEvidence: ["Production deploy approval not present", "Manual smoke-test notes required after Vercel preview"],
-      notionTask: "Add Codex Dispatch v0",
+      missingEvidence: ["Human smoke test pending."],
+      notionTask: "Codex Dispatch v0 - controlled implementation packet",
       pr: "SherifHaidar/chief-of-staff-agent-office#22",
       repo: "SherifHaidar/chief-of-staff-agent-office",
-      reviewVerdict: "Needs Codex Fixes",
+      reviewVerdict: "Pending",
       stageIndex: 4,
       vercelStatus: "Preview ready",
       workOrderPath: ".agent-office/work-orders/add-codex-dispatch-v0.md"
@@ -445,7 +524,7 @@ export function renderOperatorConsolePage(): string {
     const showcaseTask = {
       name: showcaseCase.notionTask,
       priority: "High",
-      status: "In Codex / Implementation Ready",
+      status: "Work-order PR ready",
       taskId: "notion-demo-add-codex-dispatch-v0"
     };
 
@@ -595,6 +674,28 @@ export function renderOperatorConsolePage(): string {
 
     function renderCaseFile() {
       const data = currentCaseData();
+      if (state.showcaseMode) {
+        caseFile.innerHTML = [
+          '<div class="evidence-card"><strong>Proof signals</strong><div class="study-grid">',
+          '<div class="study-card"><span>Notion task</span><strong>Tracked</strong></div>',
+          '<div class="study-card"><span>GitHub PR</span><strong class="mono">#22 linked</strong></div>',
+          '<div class="study-card"><span>Vercel preview</span><strong>Ready</strong></div>',
+          '<div class="study-card"><span>Review Desk</span><strong>Pending</strong></div>',
+          '</div></div>',
+          '<div class="evidence-card"><strong>Case identifiers</strong><div class="evidence-value mono">repo: chief-of-staff-agent-office</div><div class="evidence-value mono">branch: ' + escapeHtml(data.branch) + '</div><div class="evidence-value mono">work-order: ' + escapeHtml(data.workOrderPath) + '</div><button class="copy-button" type="button" data-copy="' + escapeHtml(data.workOrderPath) + '">Copy work-order path</button></div>',
+          '<div class="evidence-card"><strong>Approval boundary</strong><div class="evidence-value">Human approval required before dispatch, merge, deploy, or closeout. Approval hash is previewed and redacted for the public demo state.</div><div class="meta"><span class="pill warn">approval redacted</span><span class="pill info">writes disabled</span></div></div>',
+          '<div class="evidence-card"><strong>Missing evidence / risk</strong><ul class="audit-list"><li>Human smoke test pending.</li><li>Review Desk packet awaits final verification notes.</li></ul></div>',
+          '<div class="evidence-card"><strong>Audit trail</strong><ul class="audit-list"><li>Task captured</li><li>Architecture approved</li><li>Handoff generated</li><li>Work-order PR created</li><li>Dispatch packet ready</li></ul></div>'
+        ].join("");
+
+        caseFile.querySelectorAll("[data-copy]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            copyText(button.getAttribute("data-copy") || "");
+          });
+        });
+        return;
+      }
+
       const cards = [
         ["Notion task", data.notionTask, "Notion evidence is the source of task state."],
         ["GitHub PR", data.pr, "Pull request evidence and review context."],
@@ -964,6 +1065,11 @@ export function renderOperatorConsolePage(): string {
     }
 
     function renderImplementationProposal(proposal) {
+      if (state.showcaseMode) {
+        renderShowcaseStudy(proposal);
+        return;
+      }
+
       briefPreview.innerHTML = [
         '<div class="brief-title">' + escapeHtml(proposal.prTitle) + '</div>',
         '<p><strong>Implementation pending:</strong> this is the starting point for Codex implementation, not the final deliverable.</p>',
@@ -984,6 +1090,32 @@ export function renderOperatorConsolePage(): string {
         '<details><summary>PR body</summary><pre class="proposal-pre">' + escapeHtml(proposal.prBody) + '</pre></details>',
         '<details><summary>Work order content</summary><pre class="proposal-pre">' + escapeHtml(proposal.workOrderContent) + '</pre></details>',
         '<h3>Approval Boundary</h3><p>Draft only. Agent Office will commit only this work-order file. Product implementation must happen later on the created branch; this will not merge, deploy, push to main, or change repo settings/secrets.</p>'
+      ].join("");
+      updateCommandCenter();
+    }
+
+    function renderShowcaseStudy(proposal) {
+      briefPreview.innerHTML = [
+        '<div class="showcase-study">',
+        '<div class="study-head"><div><div class="study-title">Codex Dispatch v0 - controlled implementation packet</div><p class="study-summary">Agent Office turns a Notion-tracked product request into an architecture brief, Codex handoff, work-order PR, dispatch packet, review loop, human merge gate, and closeout record. This demo state is sanitized and safe for portfolio screenshots.</p></div><span class="pill warn">Human approval required</span></div>',
+        '<div class="study-grid">',
+        '<div class="study-card"><span>Status</span><strong>Work-order PR ready</strong></div>',
+        '<div class="study-card"><span>Repository</span><strong class="mono">chief-of-staff-agent-office</strong></div>',
+        '<div class="study-card"><span>Pull request</span><strong class="mono">#22</strong></div>',
+        '<div class="study-card"><span>Branch</span><strong class="mono">' + escapeHtml(proposal.branchName) + '</strong></div>',
+        '<div class="study-card"><span>Work-order path</span><strong class="mono">' + escapeHtml(proposal.workOrderPath) + '</strong></div>',
+        '<div class="study-card"><span>Approval hash</span><strong class="mono">previewed / redacted</strong></div>',
+        '</div>',
+        '<div class="case-timeline">',
+        '<div class="timeline-row"><span>01 Intake</span><strong>Notion task captured</strong><span class="pill ok">Tracked</span></div>',
+        '<div class="timeline-row"><span>02 Architecture</span><strong>Brief approved with scope, risks, constraints, and acceptance criteria</strong><span class="pill ok">Approved</span></div>',
+        '<div class="timeline-row"><span>03 Codex Handoff</span><strong>Implementation packet generated with explicit do-not-change boundaries</strong><span class="pill ok">Generated</span></div>',
+        '<div class="timeline-row"><span>04 Work-order PR</span><strong>Draft PR and sanitized work-order file prepared for dispatch</strong><span class="pill info">Ready</span></div>',
+        '<div class="timeline-row"><span>05 Codex Dispatch</span><strong>Agent implementation can begin only after human approval</strong><span class="pill warn">Gated</span></div>',
+        '<div class="timeline-row"><span>06 Review</span><strong>Review Desk packet pending smoke evidence before closeout</strong><span class="pill">Pending</span></div>',
+        '</div>',
+        '<h3>Approval Boundary</h3><p>Showcase Mode never performs live writes. It hides credentials, disables write actions, sanitizes raw output, and presents a representative delivery case.</p>',
+        '</div>'
       ].join("");
       updateCommandCenter();
     }
